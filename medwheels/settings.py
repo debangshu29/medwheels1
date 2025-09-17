@@ -38,7 +38,7 @@ DEBUG = os.environ.get("DEBUG", "True") == "True"
 
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyAvSl8hKmXkz9tE8ctzuXtRQz0Y2lUFknI")
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
 # Application definition
 
