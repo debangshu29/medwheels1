@@ -1,0 +1,580 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver dashboard - MedWheels</title>
+      <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+  <style>
+    :root {
+      --brand: #dc3545;
+      --accent: #52ce8a;
+      --ink: #222;
+      --muted: #6c757d;
+      --bg: #ffffff;
+      --chip: #f6f8ff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      display: flex;
+      min-height: 100vh;
+      background: var(--chip);
+      color: var(--ink);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      background: var(--bg);
+      padding: 1rem;
+      border-right: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+    }
+
+    .sidebar h2 {
+      color: var(--brand);
+      font-size: 1.3rem;
+      margin-bottom: 2rem;
+      font-weight: 600;
+    }
+
+    .nav-links {
+      list-style: none;
+      flex: 1;
+    }
+
+    .nav-links li {
+      margin: 0.8rem 0;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.active {
+      background: var(--chip);
+      color: var(--brand);
+    }
+
+    /* Top Navbar */
+    .topbar {
+      position: fixed;
+      left: 240px;
+      right: 0;
+      height: 60px;
+      background: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 1.5rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .topbar h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .topbar-icons {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .topbar-icons img {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      object-fit: cover;
+      padding: 2px;
+      border: 2px solid var(--accent);
+    }
+
+    /* Main Content */
+    .main {
+      margin-left: 240px;
+      margin-top: 60px;
+      padding: 2rem;
+      flex: 1;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .card h4 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+    }
+
+    .card p {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .table-section {
+      background: var(--bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      overflow-x: auto;
+      margin-bottom: 1.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th,
+    td {
+      padding: 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* Profile */
+    .profile {
+      display: flex;
+      gap: 2rem;
+      align-items: flex-start;
+    }
+
+    .profile img {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      object-fit: cover;
+      padding: 2px;
+      border: 2px solid var(--accent);
+    }
+
+    .profile-details p {
+      margin: 0.4rem 0;
+    }
+
+    /* Request Cards */
+    .request-card {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .request-card h4 {
+      margin-bottom: 0.5rem;
+      color: var(--brand);
+    }
+
+    .request-actions {
+      margin-top: 0.8rem;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .btn-accept {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-reject {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    /* View More */
+    .view-more {
+      color: var(--brand);
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .ride-details {
+      display: none;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+    <!-- Sidebar (minimal markup — styling omitted) -->
+    <aside class="sidebar" role="navigation" aria-label="Sidebar">
+      <h2>MedWheels</h2>
+      <ul class="nav-links">
+        <li><a href="#" class="active" data-page="profile">Profile</a></li>
+        <li><a href="#" data-page="dashboard">Dashboard</a></li>
+        <li><a href="#" data-page="requests">New Requests</a></li>
+        <li><a href="#" data-page="history">Ride History</a></li>
+        <li><a href="#" data-page="payments">Payments</a></li>
+        <li><a href="{% url 'logout' %}">Logout</a></li>
+      </ul>
+    </aside>
+
+    <!-- Topbar -->
+    <div class="topbar" role="banner">
+      <h3 id="page-title">Driver Dashboard</h3>
+      <div class="topbar-icons">
+        <img id="driver-img" src="{{ driver.user.profile_picture|default:'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}" alt="Driver avatar" />
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <main class="main" id="main-content" role="main">
+
+      {% if error %}
+        <div class="card"><strong>Error:</strong> {{ error }}</div>
+      {% else %}
+
+        <!-- PROFILE SUMMARY -->
+        <section class="card" aria-labelledby="profile-heading">
+          <h4 id="profile-heading">Profile</h4>
+          <div class="profile">
+            <img src="{{ driver.user.profile_picture|default:'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}" alt="Driver photo" width="120" height="120" />
+            <div class="profile-details">
+              <p><strong>Name:</strong> {{ driver.full_name }}</p>
+              <p><strong>Email:</strong> {{ driver.user.email }}</p>
+              <p><strong>Phone:</strong> {{ driver.user.phone_number }}</p>
+              <p><strong>DOB:</strong> {{ driver.dob }}</p>
+              <p><strong>Gender:</strong> {{ driver.gender }}</p>
+              <p><strong>Address:</strong> {{ driver.address }}</p>
+              <p><strong>Experience:</strong> {{ driver.experience }}</p>
+              <p><strong>Emergency Contact:</strong> {{ driver.emergency_contact }}</p>
+              {% with docs=driver.documents.all %}
+                {% if docs %}
+                  {% with doc=docs.0 %}
+                    <p><strong>License No:</strong> {{ doc.license_no }}</p>
+                    <p><strong>Vehicle:</strong> {{ doc.vehicle }}</p>
+                  {% endwith %}
+                {% endif %}
+              {% endwith %}
+            </div>
+          </div>
+        </section>
+
+        <!-- DOCUMENTS -->
+        <section class="card" aria-labelledby="docs-heading" style="margin-top:16px;">
+          <h4 id="docs-heading">Documents</h4>
+          <div>
+            {% with docs=driver.documents.all %}
+              {% if docs %}
+                {% with doc=docs.0 %}
+                  <div>
+                    <div><strong>Photo:</strong></div>
+                    {% if doc.photo %}
+                      <a href="{{ doc.photo.url }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ doc.photo.url }}" alt="Driver photo" class="doc-thumb" width="160" />
+                      </a>
+                    {% else %}
+                      <div>No photo uploaded</div>
+                    {% endif %}
+                  </div>
+
+                  <div style="margin-top:8px;">
+                    <div><strong>License scan:</strong></div>
+                    {% if doc.license_scan %}
+                      <a href="{{ doc.license_scan.url }}" target="_blank" rel="noopener noreferrer">View license scan</a>
+                    {% else %}
+                      <div>No license scan uploaded</div>
+                    {% endif %}
+                  </div>
+
+                  <div style="margin-top:8px;">
+                    <div><strong>Gov ID:</strong></div>
+                    {% if doc.gov_id %}
+                      <a href="{{ doc.gov_id.url }}" target="_blank" rel="noopener noreferrer">View gov ID</a>
+                    {% else %}
+                      <div>No government ID uploaded</div>
+                    {% endif %}
+                  </div>
+                {% endwith %}
+              {% else %}
+                <div>No documents found.</div>
+              {% endif %}
+            {% endwith %}
+          </div>
+        </section>
+
+        <!-- LIVE LOCATION CONTROLS -->
+        <section class="card" style="margin-top:16px;" aria-labelledby="live-heading">
+          <h4 id="live-heading">Live location sharing</h4>
+          <p class="small">Allow the browser to share your location. Keep this page open to continue sharing.</p>
+
+          <div style="margin-top:8px;">
+            <button id="btn-start" class="btn btn-accept">Start Sharing Location</button>
+            <button id="btn-stop" class="btn btn-reject" style="margin-left:8px">Stop Sharing</button>
+            <span id="liveStatus" style="margin-left:12px;color:#666;"></span>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div id="curPos">No position yet.</div>
+            <div id="sendLog" style="margin-top:8px;color:#666;font-size:0.9rem;"></div>
+          </div>
+        </section>
+
+        <!-- Current live info (initialized from server) -->
+        <section class="card" style="margin-top:16px;" aria-labelledby="cur-live-heading">
+          <h4 id="cur-live-heading">Current live info</h4>
+          <div id="initLiveInfo">Loading…</div>
+        </section>
+
+      {% endif %}
+    </main>
+
+    <!-- Pass initial live state from server to JS -->
+    {% if live %}
+      <script>window.INIT_DRIVER_LIVE = {{ live|safe }};</script>
+    {% else %}
+      <script>window.INIT_DRIVER_LIVE = null;</script>
+    {% endif %}
+
+  <script>
+    // get CSRF token from cookie
+    function getCookie(name) {
+      const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return match ? decodeURIComponent(match.pop()) : '';
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // DOM elements
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const curPos = document.getElementById('curPos');
+    const liveStatus = document.getElementById('liveStatus');
+    const sendLog = document.getElementById('sendLog');
+    const initLiveInfo = document.getElementById('initLiveInfo');
+
+    // state
+    let watchId = null;
+    let lastSentAt = 0;
+    const MIN_SEND_MS = 5000; // 5 seconds min interval between POSTs
+    let lastLat = null;
+    let lastLng = null;
+
+    // helper to send location to backend
+    async function sendLocation(lat, lng, isOnline=true) {
+      // lat/lng required by API; if not present, use last known coords
+      if (lat === null || lng === null) {
+        if (lastLat === null || lastLng === null) {
+          // nothing to send
+          return;
+        }
+        lat = lastLat; lng = lastLng;
+      }
+
+      const payload = { lat: lat, lng: lng, is_online: Boolean(isOnline) };
+
+      try {
+        const res = await fetch("{% url 'api_driver_live_update' %}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const j = await res.json().catch(()=>({}));
+        if (res.ok && j.ok) {
+          const t = new Date().toLocaleTimeString();
+          liveStatus.textContent = `Last sent: ${t} (online: ${isOnline ? 'yes' : 'no'})`;
+          sendLog.textContent = `Last server response at ${t}`;
+        } else {
+          console.warn('sendLocation failed', res.status, j);
+          liveStatus.textContent = 'Send failed';
+          sendLog.textContent = 'Server error: ' + (j && j.error ? j.error : res.status);
+        }
+      } catch (err) {
+        console.error('sendLocation error', err);
+        liveStatus.textContent = 'Send error';
+        sendLog.textContent = 'Network error';
+      }
+    }
+    let liveInterval = null;
+    function startLiveUpdates() {
+      if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        // one-shot and then interval
+        await sendLive(pos.coords.latitude, pos.coords.longitude, true);
+        liveInterval = setInterval(async ()=>{
+          navigator.geolocation.getCurrentPosition(async (p)=>{
+            await sendLive(p.coords.latitude, p.coords.longitude, true);
+          }, (e)=>{ console.warn(e); }, {enableHighAccuracy:true});
+        }, 4000);
+      }, (err)=>{ alert('Allow location'); }, {enableHighAccuracy:true});
+    }
+
+    async function sendLive(lat,lng,is_online=true) {
+      try {
+        await fetch('{% url "api_driver_live_update" %}', {
+          method:'POST', credentials:'same-origin',
+          headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken},
+          body: JSON.stringify({lat, lng, is_online})
+        });
+      } catch(err) { console.error(err); }
+    }
+
+
+    // geolocation callbacks
+    function onPosition(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      lastLat = lat;
+      lastLng = lng;
+
+      // show current pos
+      curPos.textContent = `Latitude: ${lat.toFixed(6)}, Longitude: ${lng.toFixed(6)} (accuracy ${position.coords.accuracy}m)`;
+
+      // throttle sending
+      const now = Date.now();
+      if (now - lastSentAt < MIN_SEND_MS) return;
+      lastSentAt = now;
+      // send as online
+      sendLocation(lat, lng, true);
+    }
+
+    function onPosError(err) {
+      console.warn('geolocation error', err);
+      curPos.textContent = 'Geolocation error: ' + (err.message || err.code);
+    }
+
+    // start/stop handlers
+    btnStart.addEventListener('click', async function (e) {
+      e.preventDefault();
+      if (!navigator.geolocation) {
+        alert('Geolocation not supported by this browser');
+        return;
+      }
+      if (watchId !== null) {
+        alert('Already sharing location');
+        return;
+      }
+
+      // request a single position to ensure permission prompt appears immediately
+      navigator.geolocation.getCurrentPosition(function(p) {
+        onPosition(p);
+      }, function(err) {
+        onPosError(err);
+      }, { enableHighAccuracy: true, timeout: 10000 });
+
+      // start watching
+      watchId = navigator.geolocation.watchPosition(onPosition, onPosError, {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 10000
+      });
+
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      liveStatus.textContent = 'Sharing…';
+      // send the last known position to mark online (if available)
+      if (lastLat !== null && lastLng !== null) sendLocation(lastLat, lastLng, true);
+    });
+
+    btnStop.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      liveStatus.textContent = 'Not sharing';
+      // send last known coords with is_online=false so backend can mark driver offline (API requires coords)
+      sendLocation(null, null, false);
+    });
+
+    // initialize UI from server-provided live object (if any)
+    (function initFromServer() {
+      btnStop.disabled = true;
+      btnStart.disabled = false;
+      if (window.INIT_DRIVER_LIVE) {
+        initLiveInfo.innerHTML = `
+          <div><strong>Last_seen:</strong> ${window.INIT_DRIVER_LIVE.last_seen || 'N/A'}</div>
+          <div><strong>Online:</strong> ${window.INIT_DRIVER_LIVE.is_online ? 'Yes' : 'No'}</div>
+          <div><strong>Lat/Lng:</strong> ${window.INIT_DRIVER_LIVE.lat && window.INIT_DRIVER_LIVE.lng ? (parseFloat(window.INIT_DRIVER_LIVE.lat).toFixed(6) + ', ' + parseFloat(window.INIT_DRIVER_LIVE.lng).toFixed(6)) : 'N/A'}</div>
+        `;
+      } else {
+        initLiveInfo.textContent = 'No live data available yet.';
+      }
+    })();
+
+    // when user leaves page, stop watcher and attempt a final "offline" ping
+    window.addEventListener('beforeunload', function () {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      // best-effort: send last coords as offline (do not wait for response)
+      if (lastLat !== null && lastLng !== null) {
+        try {
+          // navigator.sendBeacon doesn't support setting headers, so we send fetch without waiting only if same-origin cookie will be sent.
+          navigator.sendBeacon && navigator.sendBeacon("{% url 'api_driver_live_update' %}", JSON.stringify({lat: lastLat, lng: lastLng, is_online: false}));
+        } catch (e) {
+          // fallback to fetch (fire and forget)
+          fetch("{% url 'api_driver_live_update' %}", {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
+            body: JSON.stringify({lat: lastLat, lng: lastLng, is_online: false})
+          }).catch(()=>{});
+        }
+      }
+    });
+  </script>
+</body>
+</html>

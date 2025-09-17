@@ -1,0 +1,763 @@
+ {% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedWheels Admin Panel</title>
+
+  <!-- fontawesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
+        integrity="sha512-DxV+EoADOkOygM4IR9yXP8Sb2qwgidEmeqAEmDKIOfPRQZOWbXCzLC6vjbZyy0vPisbH2SyW27+ddLVCN+OMzQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- ===== Base admin styles (from your existing main admin UI) ===== -->
+  <style>
+    :root {
+      --brand: #dc3545;
+      --accent: #52ce8a;
+      --ink: #222;
+      --muted: #6c757d;
+      --bg: #ffffff;
+      --chip: #f6f8ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body { display: flex; min-height: 100vh; background: var(--chip); color: var(--ink); }
+
+    /* Sidebar */
+    .sidebar { width: 240px; background: var(--brand); color: #fff; display: flex; flex-direction: column; transition: width 0.3s ease; }
+    .sidebar h2 { text-align: center; margin: 15px 0; font-size: 1.4rem; }
+    .nav { list-style: none; flex: 1; }
+    .nav li { padding: 15px 20px; cursor: pointer; transition: background 0.3s, padding-left 0.3s; }
+    .nav li:hover, .nav li.active { background: rgba(255,255,255,0.2); padding-left: 25px; }
+
+    /* Topbar */
+    .topbar { background: var(--bg); padding: 15px 20px; border-bottom: 1px solid var(--muted);
+      display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; }
+
+    /* Dashboard cards */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 20px; }
+    .card { background: var(--bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transition: transform 0.3s; }
+    .card:hover { transform: translateY(-5px); }
+    .card h3 { margin-bottom: 10px; font-size: 18px; color: var(--brand); }
+
+    /* Drivers page (Registered only) */
+    .split { display: flex; gap: 20px; height: 100%; flex-wrap: wrap; }
+    .list { flex: 1; background: var(--bg); padding: 15px; border-radius: 12px; overflow-y: auto; min-height: 300px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .list h3 { margin-bottom: 10px; color: var(--brand); }
+    .list-item { padding: 12px; margin-bottom: 10px; background: var(--chip); border-radius: 8px; transition: background 0.3s;
+      display: flex; align-items: center; gap: 10px; }
+    .list-item:hover { background: var(--accent); color: #fff; }
+
+    /* Table styling (Employees, Customers, Accounts) */
+    table { width: 100%; border-collapse: collapse; background: var(--bg);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 12px; overflow: hidden; }
+    table th, table td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+    table th { background: var(--brand); color: #fff; }
+    table tr:hover { background: var(--chip); }
+
+    /* Profile images */
+    .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+    .name-with-avatar { display: inline-flex; align-items: center; gap: 8px; }
+
+    /* Buttons */
+    .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    .btn-danger { background: var(--brand); color: #fff; }
+    .btn-danger:hover { opacity: 0.9; }
+    .btn-link { background: none; color: var(--brand); cursor: pointer; border: none; text-decoration: underline; }
+    .btn-approve { background: var(--accent); color: #fff; }
+    .btn-reject { background: var(--brand); color: #fff; }
+    .btn-neutral { background: var(--chip); }
+    select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
+    input[type="text"], input[type="email"] { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 6px; }
+
+    /* Modals for base pages */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+    .modal-content { background: var(--bg); padding: 20px; border-radius: 12px; width: 420px; max-width: 92vw;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .modal-content h3 { margin-bottom: 10px; }
+    .close { float: right; cursor: pointer; color: var(--brand); font-weight: bold; }
+    .modal-actions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* Responsive */
+    @media (max-width: 992px) { table { display: block; overflow-x: auto; white-space: nowrap; } }
+    @media (max-width: 768px) {
+      .sidebar { width: 60px; }
+      .sidebar h2 { display: none; }
+      .nav li { text-align: center; padding: 15px 10px; }
+      .nav li:hover, .nav li.active { padding-left: 10px; }
+      .split { flex-direction: column; }
+      .modal-content { width: 95vw; }
+    }
+  </style>
+
+  <!-- ===== CEO Pending UI styles (scoped container, design unchanged) ===== -->
+  <link rel="stylesheet" href="{% static 'css/admin-common.css' %}" />
+  <style>
+    /* Wrapped in #pending to avoid bleeding into other pages; visual design kept identical */
+    #pending :root { --brand:#dc3545; --accent:#76df8e; --bg:#fff; --chip:#f6f8ff; --muted:#666; }
+    #pending body{font-family:Inter,Segoe UI,Helvetica,Arial;}
+    #pending .wrap{max-width:1100px;margin:28px auto;padding:18px;}
+    #pending header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    #pending header h1{font-size:20px;color:var(--brand);margin:0}
+    #pending .grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
+    #pending .panel{background:var(--bg);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+    #pending .list-item{display:flex;gap:12px;align-items:center;padding:10px;border-radius:8px;cursor:pointer}
+    #pending .list-item:hover{background:var(--chip)}
+    #pending .avatar{width:56px;height:56px;border-radius:8px;object-fit:cover}
+    #pending .name{font-weight:600}
+    #pending .status{font-size:12px;color:var(--muted)}
+    #pending .btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    #pending .btn-approve{background:var(--accent);color:#fff}
+    #pending .btn-reject{background:var(--brand);color:#fff}
+    #pending .empty{padding:18px;color:var(--muted);text-align:center}
+    #pending .details-row{display:flex;gap:10px;margin-bottom:8px}
+    #pending .details-row b{width:140px;color:var(--muted);font-weight:600}
+    #pending .doc-thumb{width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #eee}
+    #pending .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);justify-content:center;align-items:center;z-index:60}
+    #pending .modal .card{width:820px;max-width:96%;padding:18px;border-radius:10px;background:var(--bg)}
+    #pending .modal .card header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    #pending .modal .card .actions{display:flex;gap:8px}
+    #pending .small-muted{font-size:13px;color:var(--muted)}
+    @media (max-width:820px){ #pending .grid{grid-template-columns:1fr} #pending .list-item{gap:10px} #pending .details-row b{width:120px} }
+  </style>
+
+  <script>
+    /* Make Django placeholders available for the CEO UI as-is */
+    const PLACEHOLDER_IMG = "{% static 'img/placeholder.png' %}";
+    const DOC_PLACEHOLDER_IMG = "{% static 'img/doc-placeholder.png' %}";
+  </script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h2>MedWheels <i class="fa-solid fa-hand-holding-medical"></i></h2>
+    <ul class="nav">
+      <li class="active" onclick="showPage('dashboard')">Dashboard</li>
+      <li onclick="showPage('drivers')">Drivers</li>
+      <li onclick="showPage('pending')">Driver Pending Requests</li>
+      <li onclick="showPage('employees')">Employees</li>
+      <li onclick="showPage('customers')">Customers</li>
+      <li onclick="showPage('accounts')">Accounts</li>
+      <li onclick="showPage('org')">Organisation</li>
+    </ul>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <div>👤 Admin</div>
+    </div>
+
+    <div class="content">
+      <!-- ===== Dashboard ===== -->
+      <div id="dashboard" class="page">
+        <div class="cards">
+          <div class="card"><h3>Drivers</h3><p id="dashDrivers">0 Registered · 0 Pending</p></div>
+          <div class="card"><h3>Employees</h3><p id="dashEmployees">15 Active</p></div>
+          <div class="card"><h3>Customers</h3><p id="dashCustomers">500 Total</p></div>
+          <div class="card"><h3>Sales</h3><p>₹1,20,000</p></div>
+        </div>
+      </div>
+
+      <!-- ===== Drivers (Registered only) ===== -->
+      <div id="drivers" class="page" style="display:none">
+        <div class="split">
+          <div class="list">
+            <h3>Registered Drivers</h3>
+            <div id="driverRegistered"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Pending Requests (CEO UI) ===== -->
+      <div id="pending" class="page" style="display:none">
+        <div class="wrap">
+          <header>
+            <h1>CEO Panel — Pending Drivers</h1>
+            <div>
+              <span class="small-muted">Signed in as</span>
+              <strong>{{ request.session.user_name|default:"Admin" }}</strong>
+              &nbsp;·&nbsp;
+              <a href="{% url 'logout' %}">Logout</a>
+            </div>
+          </header>
+
+          <div class="grid">
+            <!-- left: pending list -->
+            <div class="panel" id="leftPanel">
+              <h3 style="margin:0 0 10px 0">Pending Applications</h3>
+              <div id="pendingList">
+                <div class="empty">Loading…</div>
+              </div>
+            </div>
+
+            <!-- right: details / bulk actions -->
+            <div class="panel" id="rightPanel">
+              <h3 style="margin:0 0 10px 0">Driver Details</h3>
+              <div id="emptyDetails" class="empty">Select a pending application to see details</div>
+
+              <div id="driverDetails" style="display:none">
+                <div class="details-row"><b>Full name</b><div id="d_fullname"></div></div>
+                <div class="details-row"><b>Phone</b><div id="d_phone"></div></div>
+                <div class="details-row"><b>Email</b><div id="d_email"></div></div>
+                <div class="details-row"><b>Experience</b><div id="d_experience"></div></div>
+                <div class="details-row"><b>Gender</b><div id="d_gender"></div></div>
+                <div class="details-row"><b>Address</b><div id="d_address"></div></div>
+
+                <div class="details-row"><b>License No</b><div id="d_license"></div></div>
+                <div class="details-row"><b>Vehicle</b><div id="d_vehicle"></div></div>
+                <div class="details-row"><b>Applied on</b><div id="d_created"></div></div>
+
+                <hr style="margin:12px 0">
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                  <div>
+                    <div style="font-size:13px;color:#666;margin-bottom:6px">Photo</div>
+                    <a id="d_photo_link" target="_blank"><img id="d_photo" class="doc-thumb" src="{% static 'img/placeholder.png' %}"></a>
+                  </div>
+                  <div>
+                    <div style="font-size:13px;color:#666;margin-bottom:6px">License (scan)</div>
+                    <a id="d_license_link" target="_blank"><img id="d_license_img" class="doc-thumb" src="{% static 'img/doc-placeholder.png' %}"></a>
+                  </div>
+                  <div>
+                    <div style="font-size:13px;color:#666;margin-bottom:6px">Gov ID</div>
+                    <a id="d_govid_link" target="_blank"><img id="d_govid_img" class="doc-thumb" src="{% static 'img/doc-placeholder.png' %}"></a>
+                  </div>
+                </div>
+
+                <div style="margin-top:16px;display:flex;gap:10px">
+                  <button class="btn btn-approve" id="approveBtn">Approve</button>
+                  <button class="btn btn-reject" id="rejectBtn">Reject</button>
+                  <button class="btn" id="refreshBtn">Refresh list</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confirm/Reason modal -->
+        <div id="confirmModal" class="modal">
+          <div class="card">
+            <header><strong id="confirmTitle">Confirm</strong><button onclick="closeConfirm()" class="btn">✕</button></header>
+            <div>
+              <p id="confirmText">Are you sure?</p>
+              <div id="reasonBlock" style="display:none;margin-top:8px">
+                <label>Reason (optional)</label>
+                <input id="rejectReason" type="text" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd">
+              </div>
+            </div>
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn" onclick="closeConfirm()">Cancel</button>
+              <button class="btn btn-reject" id="confirmRejectBtn" style="display:none">Confirm Reject</button>
+              <button class="btn btn-approve" id="confirmApproveBtn" style="display:none">Confirm Approve</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Employees ===== -->
+      <div id="employees" class="page" style="display:none">
+        <h3>Employees</h3>
+        <table id="employeesTable">
+          <thead>
+            <tr><th>Name</th><th>Role</th><th>Status</th><th>Past Role</th><th>Manage Role</th><th>Action</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- ===== Customers ===== -->
+      <div id="customers" class="page" style="display:none">
+        <h3>Customers</h3>
+        <table id="customersTable">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Past Bookings</th><th>History</th><th>Action</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- ===== Accounts ===== -->
+      <div id="accounts" class="page" style="display:none">
+        <h3>Accounts & Sales</h3>
+        <table>
+          <thead>
+            <tr><th>Transaction ID</th><th>Customer</th><th>Amount</th><th>Status</th></tr>
+          </thead>
+          <tbody id="accountsBody"></tbody>
+        </table>
+      </div>
+
+      <!-- ===== Organisation ===== -->
+      <div id="org" class="page" style="display:none">
+        <h3>Organisation Details</h3>
+        <p><strong>Company Name:</strong> MedWheels Pvt. Ltd.</p>
+        <p><strong>Founded:</strong> 2024</p>
+        <p><strong>Head Office:</strong> Kolkata, India</p>
+        <p><strong>Services:</strong> BLS, ALS, ICU Ambulance Booking & Tracking</p>
+        <p><strong>Mission:</strong> To provide fast, reliable, and accessible ambulance services to everyone in need.</p>
+        <h4>Contact Info</h4>
+        <p><strong>Email:</strong> support@medwheels.com</p>
+        <p><strong>Phone:</strong> +91 98765 43210</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Base modals (Customers/Employees) ===== -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeHistory()">&times;</span>
+      <h3 id="historyTitle"></h3>
+      <ul id="historyList"></ul>
+    </div>
+  </div>
+
+  <div id="updateModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeUpdate()">&times;</span>
+      <h3 id="updateTitle"></h3>
+      <form onsubmit="saveEmployee(event)">
+        <label>Name</label>
+        <input type="text" id="updName" required>
+        <br><br>
+        <label>Role</label>
+        <select id="updRole">
+          <option>HR Manager</option>
+          <option>Finance</option>
+          <option>Support Staff</option>
+          <option>Admin</option>
+        </select>
+        <br><br>
+        <label>Status</label>
+        <select id="updStatus">
+          <option>Active</option>
+          <option>Inactive</option>
+        </select>
+        <br><br>
+        <label>Past Role</label>
+        <input type="text" id="updPastRole" placeholder="e.g., Support Staff">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-neutral" onclick="closeUpdate()">Cancel</button>
+          <button type="submit" class="btn btn-approve">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Scripts ===== -->
+  <script>
+    /* ---------- Demo data for Registered/Employees/Customers/Accounts ---------- */
+    const driverData = {
+      registered: [
+        { name: "Driver A", status: "Available", img: "https://i.pravatar.cc/100?img=12" },
+        { name: "Driver B", status: "On Trip", img: "https://i.pravatar.cc/100?img=13" },
+        { name: "Driver C", status: "Offline", img: "https://i.pravatar.cc/100?img=14" },
+        { name: "Driver D", status: "Available", img: "https://i.pravatar.cc/100?img=15" },
+      ],
+      /* NOTE: Pending is loaded via CEO UI API; this array is only used
+         as a fallback to keep the dashboard number non-zero if API hasn't loaded yet. */
+      pending: []
+    };
+
+    const employeesData = [
+      { name: "Amit Sharma", role: "HR Manager", status: "Active", pastRole: "Support Staff", img: "https://i.pravatar.cc/100?img=30" },
+      { name: "Priya Mehta", role: "Finance", status: "Active", pastRole: "HR Manager", img: "https://i.pravatar.cc/100?img=31" },
+      { name: "Rahul Singh", role: "Support Staff", status: "Inactive", pastRole: "Finance", img: "https://i.pravatar.cc/100?img=32" },
+      { name: "Suman Ghosh", role: "Admin", status: "Active", pastRole: "Support Staff", img: "https://i.pravatar.cc/100?img=33" },
+    ];
+
+    const customersData = [
+      { name: "Ravi Kumar", email: "ravi@example.com", past: 5, history: ["#101 - Completed", "#102 - Completed", "#103 - Cancelled", "#147 - Completed"] },
+      { name: "Neha Sharma", email: "neha@example.com", past: 3, history: ["#201 - Completed", "#209 - Completed", "#215 - Completed"] },
+      { name: "Arjun Gupta", email: "arjun@example.com", past: 8, history: ["#301 - Completed", "#302 - Completed", "#315 - Completed", "#321 - Cancelled", "#335 - Completed"] },
+      { name: "Saira Khan", email: "saira@example.com", past: 2, history: ["#401 - Completed", "#415 - Completed"] },
+    ];
+
+    const accountsData = [
+      { id: "#TXN123", customer: "Ravi Kumar", amount: "₹1200", status: "Completed" },
+      { id: "#TXN124", customer: "Neha Sharma", amount: "₹800", status: "Pending" },
+      { id: "#TXN125", customer: "Arjun Gupta", amount: "₹1500", status: "Completed" },
+      { id: "#TXN126", customer: "Saira Khan", amount: "₹650", status: "Refunded" },
+      { id: "#TXN127", customer: "Ravi Kumar", amount: "₹2000", status: "Completed" },
+    ];
+
+    /* ---------- Renderers for base pages ---------- */
+    function renderDrivers() {
+      const regEl = document.getElementById('driverRegistered');
+      regEl.innerHTML = '';
+      driverData.registered.forEach(d => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `<img class="avatar" src="${d.img}" alt="${d.name}"> <span>${d.name} - ${d.status}</span>`;
+        regEl.appendChild(item);
+      });
+
+      // Dashboard card uses registered + pendingCountFromAPI
+      updateDriverCard();
+    }
+
+    function renderEmployees() {
+      const tbody = document.querySelector('#employeesTable tbody');
+      tbody.innerHTML = '';
+      employeesData.forEach(emp => {
+        const tr = document.createElement('tr');
+        const rolesSelect = `
+          <select onchange="changeRole('${emp.name}', this.value)">
+            <option ${emp.role==='HR Manager'?'selected':''}>HR Manager</option>
+            <option ${emp.role==='Finance'?'selected':''}>Finance</option>
+            <option ${emp.role==='Support Staff'?'selected':''}>Support Staff</option>
+            <option ${emp.role==='Admin'?'selected':''}>Admin</option>
+          </select>`;
+        tr.innerHTML = `
+          <td>
+            <span class="name-with-avatar">
+              <img class="avatar" src="${emp.img}" alt="${emp.name}">
+              ${emp.name}
+            </span>
+          </td>
+          <td>${emp.role}</td>
+          <td>${emp.status}</td>
+          <td>${emp.pastRole || '-'}</td>
+          <td>${rolesSelect}</td>
+          <td><button class="btn btn-link" onclick="openUpdate('${emp.name}')">Update</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('dashEmployees').textContent =
+        `${employeesData.filter(e => e.status === 'Active').length} Active`;
+    }
+
+    function renderCustomers() {
+      const tbody = document.querySelector('#customersTable tbody');
+      tbody.innerHTML = '';
+      customersData.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${c.name}</td>
+          <td>${c.email}</td>
+          <td style="text-align: center;">${c.past}</td>
+          <td><button class="btn-link" onclick="openHistory('${c.name}')">View History</button></td>
+          <td><button class="btn btn-danger" onclick="deactivateCustomer('${c.name}')">Deactivate</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('dashCustomers').textContent = `${customersData.length} Total`;
+    }
+
+    function renderAccounts() {
+      const tbody = document.getElementById('accountsBody');
+      tbody.innerHTML = '';
+      accountsData.forEach(a => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${a.id}</td><td>${a.customer}</td><td>${a.amount}</td><td>${a.status}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* ---------- Navigation ---------- */
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+      document.getElementById(page).style.display = 'block';
+      document.getElementById('page-title').innerText = page === 'pending' ? 'Pending Requests' :
+        page.charAt(0).toUpperCase() + page.slice(1);
+      document.querySelectorAll('.nav li').forEach(li => li.classList.remove('active'));
+      (window.event && window.event.target) && window.event.target.classList.add('active');
+
+      // Lazy-load pending list each time user visits Pending page
+      if (page === 'pending') { loadPending(); }
+    }
+
+    /* ---------- Customers: History & Deactivate ---------- */
+    function openHistory(name) {
+      const modal = document.getElementById("historyModal");
+      document.getElementById("historyTitle").innerText = `${name}'s Booking History`;
+      const list = document.getElementById("historyList");
+      list.innerHTML = '';
+      const cust = customersData.find(c => c.name === name);
+      (cust?.history || []).forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = `Booking ${item}`;
+        list.appendChild(li);
+      });
+      modal.style.display = "flex";
+    }
+    function closeHistory() { document.getElementById("historyModal").style.display = "none"; }
+    function deactivateCustomer(name) { alert(`Customer '${name}' has been deactivated (demo).`); }
+
+    /* ---------- Employees: Role & Update ---------- */
+    let editingEmployeeName = null;
+    function changeRole(name, newRole) {
+      const emp = employeesData.find(e => e.name === name);
+      if (!emp) return;
+      emp.pastRole = emp.role;
+      emp.role = newRole;
+      renderEmployees();
+    }
+    function openUpdate(name) {
+      editingEmployeeName = name;
+      const emp = employeesData.find(e => e.name === name);
+      if (!emp) return;
+      document.getElementById('updateTitle').innerText = `Update Employee: ${name}`;
+      document.getElementById('updName').value = emp.name;
+      document.getElementById('updRole').value = emp.role;
+      document.getElementById('updStatus').value = emp.status;
+      document.getElementById('updPastRole').value = emp.pastRole || '';
+      document.getElementById('updateModal').style.display = 'flex';
+    }
+    function closeUpdate() { document.getElementById('updateModal').style.display = 'none'; }
+    function saveEmployee(evt) {
+      evt.preventDefault();
+      if (!editingEmployeeName) return;
+      const emp = employeesData.find(e => e.name === editingEmployeeName);
+      if (!emp) return;
+      const newName = document.getElementById('updName').value.trim();
+      const newRole = document.getElementById('updRole').value;
+      const newStatus = document.getElementById('updStatus').value;
+      const newPastRole = document.getElementById('updPastRole').value.trim();
+
+      emp.name = newName || emp.name;
+      emp.pastRole = newPastRole || emp.pastRole || '-';
+      if (emp.role !== newRole) emp.pastRole = emp.role;
+      emp.role = newRole;
+      emp.status = newStatus;
+
+      closeUpdate();
+      renderEmployees();
+      alert('Employee details updated (demo).');
+    }
+
+    // Close base modals when clicking outside content
+    window.addEventListener('click', (e) => {
+      ['historyModal','updateModal'].forEach(id => {
+        const modal = document.getElementById(id);
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    });
+
+    /* ===================== CEO Pending UI JS (unchanged behavior, scoped to #pending) ===================== */
+
+    // API URLs (from Django url names)
+    const API_PENDING = "{% url 'admin_pending_drivers' %}";
+    const API_APPROVE  = "{% url 'admin_approve_driver' %}";
+    const API_REJECT   = "{% url 'admin_reject_driver' %}";
+
+    // CSRF helper
+    function getCookie(name) {
+      let v = null;
+      if (document.cookie && document.cookie !== '') {
+        const c = document.cookie.split(';');
+        for (let i=0;i<c.length;i++) {
+          const cookie = c[i].trim();
+          if (cookie.substring(0, name.length+1) === (name + '=')) { v = decodeURIComponent(cookie.substring(name.length+1)); break; }
+        }
+      }
+      return v;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // Elements within Pending page
+    const pendingRoot = document.getElementById('pending');
+    const pendingListEl = pendingRoot.querySelector('#pendingList');
+    const emptyDetails = pendingRoot.querySelector('#emptyDetails');
+    const detailsEl = pendingRoot.querySelector('#driverDetails');
+
+    let currentDriver = null;
+    let currentDriverId = null;
+    let pendingCountFromAPI = 0; // used for Dashboard card
+
+    function showLoadingList(){
+      pendingListEl.innerHTML = '<div class="empty">Loading…</div>';
+    }
+
+    // Fetch pending drivers and render left column
+    async function loadPending() {
+      showLoadingList();
+      try {
+        const res = await fetch(API_PENDING, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('Fetch failed');
+        const json = await res.json();
+        const list = json.pending || [];
+        pendingCountFromAPI = list.length;
+        renderPending(list);
+        updateDriverCard(); // refresh dashboard card with live pending count
+      } catch(err){
+        pendingListEl.innerHTML = '<div class="empty">Failed to load pending list</div>';
+        console.error(err);
+      }
+    }
+
+    function renderPending(list){
+      if (!list.length) {
+        pendingListEl.innerHTML = '<div class="empty">No pending driver applications</div>';
+        // Clear detail pane when list empty
+        detailsEl.style.display='none'; emptyDetails.style.display='block';
+        return;
+      }
+      pendingListEl.innerHTML = '';
+      list.forEach(d => {
+        const createdAt = d.created_at ? (isNaN(new Date(d.created_at)) ? '' : new Date(d.created_at).toLocaleString()) : '';
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.dataset.driverId = d.id;
+        const photoSrc = (d.media && d.media.photo_url) ? d.media.photo_url : PLACEHOLDER_IMG;
+        row.innerHTML = `
+          <img class="avatar" src="${photoSrc}" alt="">
+          <div style="flex:1">
+            <div class="name">${escapeHtml(d.full_name)}</div>
+            <div class="status">${escapeHtml(d.license_no || d.status || '')}</div>
+          </div>
+          <div style="min-width:80px;text-align:right"><small class="small-muted">${createdAt}</small></div>
+        `;
+        row.addEventListener('click', ()=> openDetails(d));
+        pendingListEl.appendChild(row);
+      });
+    }
+
+    function openDetails(d){
+      currentDriver = d; currentDriverId = d.id;
+      emptyDetails.style.display = 'none';
+      detailsEl.style.display = 'block';
+
+      pendingRoot.querySelector('#d_fullname').innerText = d.full_name || '';
+      pendingRoot.querySelector('#d_phone').innerText = d.phone || '';
+      pendingRoot.querySelector('#d_email').innerText = d.email || '';
+      pendingRoot.querySelector('#d_experience').innerText = d.experience ?? 0;
+      pendingRoot.querySelector('#d_gender').innerText = d.gender || '';
+      pendingRoot.querySelector('#d_address').innerText = d.address || '';
+
+      pendingRoot.querySelector('#d_license').innerText = d.license_no || '';
+      pendingRoot.querySelector('#d_vehicle').innerText = d.vehicle || '';
+      pendingRoot.querySelector('#d_created').innerText = d.created_at ? new Date(d.created_at).toLocaleString() : '';
+
+      const photo = (d.media && d.media.photo_url) || '';
+      const lic = (d.media && d.media.license_scan_url) || '';
+      const gov = (d.media && d.media.gov_id_url) || '';
+
+      const elPhoto = pendingRoot.querySelector('#d_photo');
+      const elPhotoLink = pendingRoot.querySelector('#d_photo_link');
+      elPhoto.src = photo || PLACEHOLDER_IMG; elPhotoLink.href = photo || '#';
+
+      const elLic = pendingRoot.querySelector('#d_license_img');
+      const elLicLink = pendingRoot.querySelector('#d_license_link');
+      elLic.src = lic || DOC_PLACEHOLDER_IMG; elLicLink.href = lic || '#';
+
+      const elGov = pendingRoot.querySelector('#d_govid_img');
+      const elGovLink = pendingRoot.querySelector('#d_govid_link');
+      elGov.src = gov || DOC_PLACEHOLDER_IMG; elGovLink.href = gov || '#';
+    }
+
+    // Confirm modal wires
+    const confirmModal = pendingRoot.querySelector('#confirmModal');
+    const confirmText = pendingRoot.querySelector('#confirmText');
+    const confirmTitle = pendingRoot.querySelector('#confirmTitle');
+    const reasonBlock = pendingRoot.querySelector('#reasonBlock');
+    const confirmApproveBtn = pendingRoot.querySelector('#confirmApproveBtn');
+    const confirmRejectBtn = pendingRoot.querySelector('#confirmRejectBtn');
+
+    pendingRoot.querySelector('#approveBtn').addEventListener('click', ()=> openConfirm('approve'));
+    pendingRoot.querySelector('#rejectBtn').addEventListener('click', ()=> openConfirm('reject'));
+    pendingRoot.querySelector('#refreshBtn').addEventListener('click', ()=> loadPending());
+
+    function openConfirm(mode){
+      if (!currentDriverId) { alert('Select a driver first'); return; }
+      confirmModal.style.display = 'flex';
+      reasonBlock.style.display = (mode==='reject') ? 'block' : 'none';
+      confirmText.innerText = (mode==='approve')
+        ? `Approve ${currentDriver.full_name}? This will set status to approved.`
+        : `Reject ${currentDriver.full_name}? Provide reason (optional).`;
+      confirmTitle.innerText = (mode==='approve') ? 'Confirm Approve' : 'Confirm Reject';
+      confirmApproveBtn.style.display = (mode==='approve') ? 'inline-block' : 'none';
+      confirmRejectBtn.style.display = (mode==='reject') ? 'inline-block' : 'none';
+      confirmApproveBtn.onclick = doApprove;
+      confirmRejectBtn.onclick = doReject;
+    }
+
+    function closeConfirm(){
+      confirmModal.style.display = 'none';
+      pendingRoot.querySelector('#rejectReason').value = '';
+    }
+
+    async function doApprove(){
+      if (!currentDriverId) return;
+      confirmApproveBtn.disabled = true;
+      try {
+        const res = await fetch(API_APPROVE, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Content-Type':'application/json','X-CSRFToken':csrftoken},
+          body: JSON.stringify({driver_id: currentDriverId})
+        });
+        const j = await res.json();
+        if (res.ok && j.ok) {
+          alert('Driver approved');
+          await loadPending();
+          closeConfirm();
+          detailsEl.style.display='none'; emptyDetails.style.display='block'; currentDriver = null; currentDriverId=null;
+        } else {
+          alert('Approve failed: ' + (j.error || JSON.stringify(j)));
+        }
+      } catch (err) {
+        console.error(err); alert('Approve failed');
+      } finally { confirmApproveBtn.disabled = false; }
+    }
+
+    async function doReject(){
+      if (!currentDriverId) return;
+      const reason = pendingRoot.querySelector('#rejectReason').value || '';
+      confirmRejectBtn.disabled = true;
+      try {
+        const res = await fetch(API_REJECT, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Content-Type':'application/json','X-CSRFToken':csrftoken},
+          body: JSON.stringify({driver_id: currentDriverId, reason})
+        });
+        const j = await res.json();
+        if (res.ok && j.ok) {
+          alert('Driver rejected');
+          await loadPending();
+          closeConfirm();
+          detailsEl.style.display='none'; emptyDetails.style.display='block'; currentDriver=null; currentDriverId=null;
+        } else {
+          alert('Reject failed: ' + (j.error || JSON.stringify(j)));
+        }
+      } catch (err) {
+        console.error(err); alert('Reject failed');
+      } finally { confirmRejectBtn.disabled = false; }
+    }
+
+    function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    // Close the confirm modal when clicking outside
+    confirmModal.addEventListener('click', (e)=> { if (e.target === confirmModal) closeConfirm(); });
+
+    /* ---------- Dashboard Driver Card updater ---------- */
+    function updateDriverCard(){
+      const regCount = driverData.registered.length;
+      const pendCount = pendingCountFromAPI ?? (driverData.pending?.length || 0);
+      const el = document.getElementById('dashDrivers');
+      if (el) el.textContent = `${regCount} Registered · ${pendCount} Pending`;
+    }
+
+    /* ---------- Init base pages ---------- */
+    function init() {
+      renderDrivers();
+      renderEmployees();
+      renderCustomers();
+      renderAccounts();
+      updateDriverCard();
+    }
+    init();
+
+  </script>
+</body>
+</html>

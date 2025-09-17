@@ -1,0 +1,96 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Application Submitted | MedWheels</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <style>
+    :root {
+      --brand: #dc3545;
+      --accent: #76df8e;
+      --ink: #222;
+      --muted: #6c757d;
+      --bg: #ffffff;
+      --chip: #f6f8ff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    body {
+      background: var(--chip);
+      color: var(--ink);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background: var(--bg);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px 30px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      animation: fadeIn 0.6s ease;
+    }
+
+    .container i {
+      font-size: 60px;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    .container h1 {
+      font-size: 1.8rem;
+      color: var(--brand);
+      margin-bottom: 15px;
+    }
+
+    .container p {
+      color: var(--muted);
+      font-size: 1rem;
+      margin-bottom: 25px;
+    }
+
+    .back-home {
+      display: inline-block;
+      background: var(--brand);
+      color: #fff;
+      text-decoration: none;
+      padding: 12px 25px;
+      border-radius: 25px;
+      font-weight: 600;
+      transition: background 0.3s ease;
+    }
+
+    .back-home:hover {
+      background: #b02a37;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <i class="fas fa-check-circle"></i>
+    <h1>Thank you, {{ driver.full_name }}!</h1>
+    <p>Your application has been successfully submitted for review.  
+       We’ll notify you once it has been processed.</p>
+    <a href="{% url 'home' %}" class="back-home">Go to Home</a>
+  </div>
+</body>
+</html>

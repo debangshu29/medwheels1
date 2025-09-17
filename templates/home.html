@@ -1,0 +1,416 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-signin-client_id" content="759495254081-1p71qm27cbql0to2q14n087g1t2n2o63.apps.googleusercontent.com">
+    <title>MedWheels — Ambulance Booking Service</title>
+    <!-- custom stylesheet -->
+    <!-- <link rel="stylesheet" href="style.css"> -->
+    <!-- fontawsome -->
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
+        integrity="sha512-DxV+EoADOkOygM4IR9yXP8Sb2qwgidEmeqAEmDKIOfPRQZOWbXCzLC6vjbZyy0vPisbH2SyW27+ddLVCN+OMzQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        :root {
+            --brand: #dc3545;
+            --accent: #76df8e;
+            --ink: #222;
+            --muted: #6c757d;
+            --bg: #ffffff;
+            --chip: #f6f8ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--chip);
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+            padding-top: 60px;
+        }
+
+        a {
+            text-decoration: none;
+            color: var(--ink);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--brand);
+            height: 60px;
+            padding: 10px;
+            box-shadow: 0 4px 2px -2px rgba(98, 1, 1, 0.391);
+
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 100;
+        }
+
+        .logo {
+            font-family: Verdana, Geneva, Tahoma, sans-serif;
+            color: var(--chip);
+            align-items: center;
+        }
+
+        .logo img {
+            width: 30px;
+            padding-right: 2px;
+        }
+
+        .nav-centre ul {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .nav-centre ul li {
+            text-decoration: none;
+            list-style: none;
+            padding: 0 10px;
+            font-size: 18px;
+
+            width: 100px;
+            text-align: center;
+        }
+
+        nav ul li a {
+            color: var(--chip);
+        }
+
+        .nav-centre ul li a {
+            position: relative;
+            display: inline-block;
+            color: var(--chip);
+            font-size: 18px;
+            transition: color 0.3s ease;
+            overflow: hidden;
+        }
+
+        .nav-centre ul li a:hover {
+            color: var(--chip);
+            font-weight: 600;
+        }
+
+        .nav-centre ul li.active a {
+            font-weight: 600;
+        }
+
+        .nav-right li {
+            list-style: none;
+        }
+
+        .nav-right li a {
+            font-size: 18px;
+            color: var(--bg);
+            transition: .5s transform, .5s text-shadow;
+        }
+
+        .nav-right li a:hover {
+            transform: translateY(-2px);
+            text-shadow: 2px 2px rgb(66, 66, 66);
+        }
+
+        .menu-toggle {
+            display: none;
+            font-size: 22px;
+            color: var(--chip);
+            cursor: pointer;
+        }
+
+        .nav-centre ul li:last-child a {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+                font-size: 24px;
+                color: var(--chip);
+                cursor: pointer;
+                z-index: 2000;
+            }
+
+            .nav-right {
+                display: none;
+            }
+
+            .nav-centre {
+                display: none;
+                position: absolute;
+                top: 50px;
+                left: 0;
+                width: 100%;
+                background: #f1505f;
+                padding: 20px 0;
+                text-align: center;
+                z-index: 1000;
+            }
+
+            .nav-centre.active {
+                display: block;
+            }
+
+            .nav-centre ul {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .nav-centre ul li {
+                margin: 10px 0;
+            }
+
+            .nav-centre ul li a {
+                color: var(--chip);
+                font-size: 18px;
+                display: block;
+            }
+
+            .nav-centre ul li:last-child a {
+                font-weight: bold;
+                border: 1px solid var(--chip);
+                padding: 6px 12px;
+                border-radius: 4px;
+                display: block;
+            }
+        }
+
+
+        /* home section */
+        .home {
+            padding: 50px;
+        }
+
+        .container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .left span {
+            display: inline-block;
+            background: #e4eaff;
+            color: #3b4aa1;
+            font-weight: 600;
+            padding: 6px 15px;
+            border-radius: 999px;
+            font-size: 13px
+        }
+
+        .btn {
+            background: var(--brand);
+            border: none;
+            border-radius: 999px;
+            padding: 12px 28px;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(220, 53, 69, .25);
+            transition: .5s transform, .5s box-shadow, .5s background;
+            margin-top: 10px;
+        }
+
+        .btn a {
+            color: var(--bg);
+        }
+
+        .btn:hover {
+            background: #b32335;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(220, 53, 69, .35)
+        }
+
+        .left h1 {
+            font-size: clamp(28px, 4.2vw, 44px);
+            font-weight: 800;
+            line-height: 1.15;
+            padding: 15px 0;
+        }
+
+        .left p {
+            color: var(--muted);
+            font-size: clamp(15px, 1.5vw, 18px);
+            padding: 7px;
+        }
+
+        .left a .arrow-text,
+        .left a .arrow {
+            background-color: transparent;
+            color: var(--brand);
+            padding: 0 1px;
+            font-size: 16px;
+            transition: .5s;
+        }
+
+        .left a:hover .arrow-text {
+            transform: translateX(-2px);
+        }
+
+        .left a:hover .arrow {
+            transform: translateX(2px);
+        }
+
+        @media (max-width: 768px) {
+            .home .container {
+                flex-direction: column;
+                align-items: center;
+                gap: 30px;
+                text-align: center;
+            }
+
+            .home .right img {
+                width: 100%;
+                max-width: 400px;
+                height: auto;
+            }
+
+            .home .left h1,
+            .home .left p {
+                text-align: center;
+            }
+        }
+
+        /* footer */
+        .footer {
+            padding-top: 1.5rem;
+            padding-bottom: 1.5rem;
+            padding: 1rem;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .foot-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    </style>
+
+</head>
+
+<body>
+    <!-- navbar -->
+    <nav>
+        <div class="nav-left">
+            <h3 class="logo"><img src="/static/ambulance.png">MedWheels</h3>
+        </div>
+
+        <!-- hamburger button (only visible on small screens) -->
+        <div class="menu-toggle" id="menu-toggle">
+            <i class="fas fa-bars"></i>
+        </div>
+
+        <div class="nav-centre" id="menu">
+            <ul>
+                <li><a class="active" href="#home">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="">Services</a></li>
+                <li><a href="driver">Drivers</a></li>
+                <li><a href="#hospitals">Hospitals</a></li>
+                <li><a href="#contact">Contact</a></li>
+
+                <!-- login link for small screens -->
+                <li><a href="{% url 'signup_login' %}?show=login">Login/Sign Up</a></li>
+
+            </ul>
+        </div>
+        <ul class="nav-right">
+          {% if user %}
+            <li style="display:inline-block; margin-right:12px;">
+              <a href="{% url 'home' %}">Hi, {{ first_name }}</a>
+            </li>
+            <li style="display:inline-block;">
+              <a href="{% url 'logout' %}">Logout</a>
+            </li>
+          {% else %}
+            <li style="display:inline-block; margin-right:12px;">
+              <!-- Login first -->
+              <a href="{% url 'signup_login' %}?show=login"> Login</a>
+            </li>
+            <li style="display:inline-block;">
+              <!-- Sign Up -->
+              <a href="{% url 'signup_login' %}?show=signup">Sign Up</a>
+            </li>
+          {% endif %}
+        </ul>
+
+
+    </nav>
+
+    <!-- hero-section -->
+    <div class="home">
+        <div class="container">
+            <!-- left side -->
+            <div class="left">
+                <span>24×7 Emergency Response</span>
+                <h1>Ambulance Booking Service</h1>
+                <p>Fast, reliable and professional ambulance services at your fingertips — from Basic to
+                    ALS/ICU. Book in seconds and track in real time.</p>
+
+                <button class="btn"><a href="service">Book Now</a></button>
+                <a href="#track" style="font-weight:600;color:var(--brand)"><span class="arrow-text">Track a
+                        Ride</span><span class="arrow">→</span></a>
+            </div>
+
+            <!-- right side -->
+            <div class="right">
+                <img src="/static/home-right.png" alt="">
+            </div>
+
+        </div>
+    </div>
+
+    <!-- footer -->
+    <footer class="footer">
+        <div class="foot-container">
+            <small>© <span id="yr"></span> MedWheels — All rights reserved.</small>
+            <small><a href="#" style="color:var(--brand)">Privacy</a> · <a href="#"
+                    style="color:var(--brand)">Terms</a> . <a href="admin_login" style="color:var(--brand)">Admin</a></small>
+
+        </div>
+    </footer>
+
+
+
+
+    <script>
+        document.getElementById('yr').textContent = new Date().getFullYear();
+
+        const menuToggle = document.getElementById("menu-toggle");
+        const menu = document.getElementById("menu");
+
+        menuToggle.addEventListener("click", () => {
+            menu.classList.toggle("active");
+            menuToggle.querySelector("i").classList.toggle("fa-bars");
+            menuToggle.querySelector("i").classList.toggle("fa-times");
+        });
+
+
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const navLinks = document.querySelectorAll('#menu li');
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    navLinks.forEach(otherLink => {
+                        otherLink.classList.remove('active');
+                    });
+                    link.classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,539 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MedWheels — Finding drivers</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css">
+<style>
+  :root{
+    --bg:#f6f8fb; --card:#fff; --brand:#dc3545; --accent:#2b9f6b; --muted:#6c757d;
+    --shadow: 0 6px 20px rgba(30,30,30,0.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#111;padding:20px}
+  .layout{max-width:1200px;margin:18px auto;display:flex;gap:18px}
+  .panel{width:420px;background:var(--card);border-radius:12px;padding:18px;box-shadow:var(--shadow)}
+  h2{margin-bottom:12px;color:var(--brand)}
+  .mapwrap{flex:1;height:640px;border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+  #map{width:100%;height:100%}
+  .progress { height:6px;background:#eee;border-radius:6px;overflow:hidden;margin:12px 0 16px }
+  .progress .bar { height:100%; width:0%; background:linear-gradient(90deg,var(--brand),#ff7a59); transition:width 400ms linear }
+  .summary { padding:12px;border-radius:10px;background:#fafafa;border:1px solid #eee;margin-bottom:12px }
+  .summary .line{display:flex;gap:12px;align-items:center}
+  .summary .addr{font-weight:700}
+  .fare { font-size:20px;font-weight:700;margin-top:8px }
+  .note { color:var(--muted); font-size:13px;margin-top:8px }
+  .cancel-btn { display:block;width:100%;padding:12px;border-radius:10px;border:1px solid #eee;background:#fff;color:var(--brand);font-weight:700;margin-top:14px;cursor:pointer }
+  /* driver card */
+  .driver-card { display:flex;gap:12px;align-items:center;padding:12px;border-radius:10px;border:1px solid #eee }
+  .driver-avatar { width:72px;height:72px;border-radius:50%;object-fit:cover;background:#f0f0f0;flex:0 0 72px }
+  .driver-meta { flex:1 }
+  .driver-meta .name { font-weight:800;font-size:18px }
+  .driver-meta .vehicle { color:var(--muted);margin-top:6px }
+  .small { font-size:13px;color:var(--muted) }
+  .action-row { display:flex;gap:8px;margin-top:12px }
+  .btn-primary { flex:1;padding:12px;border-radius:10px;background:var(--brand);color:#fff;border:0;cursor:pointer;font-weight:700 }
+  .btn-ghost { flex:1;padding:12px;border-radius:10px;background:#fff;border:1px solid #ddd;cursor:pointer }
+  /* pulse indicator (map) */
+  .pulse-dot { width:12px;height:12px;border-radius:50%;background:rgba(69,162,255,1);box-shadow:0 0 0 0 rgba(69,162,255,0.2); }
+  /* small helper */
+  .muted { color:var(--muted) }
+
+  /* modal */
+  .mw-modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:2000; }
+  .mw-modal { width:90%; max-width:420px; background:#fff; border-radius:12px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,0.12); }
+  .mw-modal h3{ margin-bottom:8px; color:var(--brand); }
+  .mw-modal .content{ color:#333; margin-bottom:12px; }
+  .mw-modal .actions{ display:flex; gap:8px; justify-content:flex-end; }
+  .mw-btn { padding:10px 14px; border-radius:8px; border:0; cursor:pointer; font-weight:700 }
+  .mw-btn.secondary{ background:#fff; border:1px solid #ddd; color:#333 }
+  .mw-btn.primary{ background:var(--brand); color:#fff }
+
+  /* responsive */
+  @media (max-width: 960px){
+    .layout{flex-direction:column}
+    .panel{width:auto}
+    .mapwrap{height:480px}
+  }
+
+</style>
+</head>
+<body>
+
+    <div class="layout">
+      <!-- Left panel -->
+      <div class="panel" id="left-panel">
+        <h2 id="left-title">Finding available drivers</h2>
+
+        <!-- Progress bar -->
+        <div class="progress" aria-hidden="true"><div class="bar" id="match-progress"></div></div>
+
+        <!-- Summary (pickup -> drop) -->
+        <div class="summary" id="summary-box">
+          <div class="line"><div style="width:12px;height:12px;border-radius:50%;background:#2b9f6b"></div><div>
+            <div class="addr" id="ui-pickup">Pickup address</div>
+            <div class="small" id="ui-pickup-sub">—</div>
+          </div></div>
+
+          <div style="height:10px"></div>
+
+          <div class="line"><div style="width:12px;height:12px;border-radius:3px;background:#000"></div><div>
+            <div class="addr" id="ui-drop">Dropoff address</div>
+            <div class="small" id="ui-drop-sub">—</div>
+          </div></div>
+
+          <div class="fare" id="ui-fare">₹ —</div>
+
+          <!-- ETA countdown for closest vehicle while matching -->
+          <div class="small" style="margin-top:8px">Closest vehicle ETA: <strong id="ui-closest-eta">—</strong></div>
+
+          <div class="note">We'll share driver details shortly</div>
+        </div>
+
+        <!-- Buttons -->
+        <button class="cancel-btn" id="cancel-matching-btn">Cancel ride</button>
+
+        <div style="height:10px"></div>
+        <div class="muted small">Note: you can cancel while matching.</div>
+      </div>
+
+      <!-- Map -->
+      <div class="mapwrap">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Assigned template (hidden; we'll replace left panel contents on assignment) -->
+    <template id="assigned-template">
+      <h2>Driver on the way</h2>
+      <div class="driver-card">
+        <img class="driver-avatar" id="drv-photo" src="{% static 'img/default_driver.jpg' %}" alt="Driver">
+        <div class="driver-meta">
+          <div class="name" id="drv-name">Name</div>
+          <div class="vehicle" id="drv-vehicle">WB00XX0000 • Ambulance</div>
+          <div class="small" id="drv-eta">Arriving in 3 min</div>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="summary" id="assigned-summary">
+        <div class="line"><div style="width:12px;height:12px;border-radius:50%;background:#2b9f6b"></div><div style="margin-left:8px">
+          <div class="addr" id="ui-pickup-assigned">Pickup address</div>
+          <div class="small" id="ui-pickup-sub-assigned">—</div>
+        </div></div>
+
+        <div style="height:10px"></div>
+
+        <div class="line"><div style="width:12px;height:12px;border-radius:3px;background:#000"></div><div style="margin-left:8px">
+          <div class="addr" id="ui-drop-assigned">Dropoff address</div>
+          <div class="small" id="ui-drop-sub-assigned">—</div>
+        </div></div>
+
+        <div class="fare" id="ui-fare-assigned">₹ —</div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn-ghost" id="contact-driver-btn">Contact</button>
+        <button class="btn-primary" id="cancel-assigned-btn">Cancel ride</button>
+      </div>
+    </template>
+
+    <!-- No-drivers modal -->
+    <div class="mw-modal-overlay" id="no-drivers-modal" role="dialog" aria-hidden="true">
+      <div class="mw-modal" role="document" aria-labelledby="no-drivers-title">
+        <h3 id="no-drivers-title">No ambulances found nearby</h3>
+        <div class="content" id="no-drivers-msg">We couldn't find nearby ambulances within the search radius. You can retry or try again later.</div>
+        <div class="actions">
+          <button class="mw-btn secondary" id="no-drivers-close">Close</button>
+          <button class="mw-btn primary" id="no-drivers-retry">Retry (widen radius)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel confirm modal -->
+    <div class="mw-modal-overlay" id="cancel-confirm-modal" role="dialog" aria-hidden="true">
+      <div class="mw-modal" role="document" aria-labelledby="cancel-confirm-title">
+        <h3 id="cancel-confirm-title">Cancel ride?</h3>
+        <div class="content" id="cancel-confirm-msg">Are you sure you want to cancel this ride? You may be charged a cancellation fee.</div>
+        <div class="actions">
+          <button class="mw-btn secondary" id="cancel-confirm-no">No</button>
+          <button class="mw-btn primary" id="cancel-confirm-yes">Yes, cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel result modal -->
+    <div class="mw-modal-overlay" id="cancel-result-modal" role="dialog" aria-hidden="true">
+      <div class="mw-modal" role="document" aria-labelledby="cancel-result-title">
+        <h3 id="cancel-result-title">Ride cancelled</h3>
+        <div class="content" id="cancel-result-msg">Your ride has been cancelled.</div>
+        <div class="actions">
+          <button class="mw-btn primary" id="cancel-result-ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=places"></script>
+    <script>
+        /*
+          find_driver.html
+          Changes in this file:
+            - nearby markers now show ambulance type (e.g. "MedWheels Basic") as title while matching
+            - assigned driver marker gets driver's name as title when assigned
+            - automatic map "view cycling": periodically zooms to pickup, to drop, and to full route
+        */
+
+        const csrftoken = (function(){ const v = document.cookie.match('(^|;)\\s*' + 'csrftoken' + '\\s*=\\s*([^;]+)'); return v ? decodeURIComponent(v.pop()) : '' })();
+
+        // --- Map & markers ---
+        let map, directionsService, directionsRenderer;
+        let pickupMarker = null, dropMarker = null;
+        let driverMarker = null;
+        let nearbyMarkers = {}; // id -> marker
+        let pickupCircle = null; // animated pulse
+        let pulseInterval = null;
+
+        const DEFAULT_CENTER = { lat: {{ DEFAULT_MAP_CENTER.0|default:22.5726 }}, lng: {{ DEFAULT_MAP_CENTER.1|default:88.3639 }} };
+        const DEFAULT_ZOOM = 13;
+
+        // progress bar animation control (deterministic)
+        let progressInterval = null;
+        let progressStartTs = null;
+        const MATCH_TIMEOUT_MS = 60 * 1000; // 1 minute
+        const MATCH_PROGRESS_TICK_MS = 1000;
+
+        // nearby polling while matching
+        let nearbyPollTimer = null;
+        const NEARBY_POLL_MS = 7000; // poll every 7s while matching
+        const NEARBY_URL = new URL("{% url 'api_nearby_ambulances' %}", window.location.origin);
+
+        // Search radius settings (progressively widen on retry)
+        const INITIAL_SEARCH_RADIUS_M = 5000; // start with 5 km
+        const MAX_SEARCH_RADIUS_M = 50000;    // max 50km
+        const RADIUS_GROW_FACTOR = 2;
+        let currentSearchRadius = INITIAL_SEARCH_RADIUS_M;
+
+        // ETA countdown
+        let etaTimer = null;
+        let closestEtaSec = null;
+        const AVG_SPEED_KMPH = 25.0; // used to convert distance -> ETA
+
+        // Map auto-view cycle
+        let ROUTE_BOUNDS = null; // stored from drawRoute
+        let MAP_CYCLE_INTERVAL = null;
+        const MAP_CYCLE_MS = 6000; // switch view every 6s
+        let mapCycleIndex = 0; // 0=pickup,1=drop,2=route
+
+        function initMapFindDriver(){
+          directionsService = new google.maps.DirectionsService();
+          directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
+          map = new google.maps.Map(document.getElementById('map'), { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, streetViewControl: false });
+          directionsRenderer.setMap(map);
+        }
+
+        // helper: create/update a small marker for pickup
+        function setPickupMarker(latlng){
+          if(!pickupMarker){
+            pickupMarker = new google.maps.Marker({ position: latlng, map, title: 'Pickup', icon: { path: google.maps.SymbolPath.CIRCLE, scale:8, fillColor:'#2b9f6b', fillOpacity:1, strokeWeight:2, strokeColor:'#fff' } });
+          } else pickupMarker.setPosition(latlng);
+          // also center map slightly
+          map.panTo(latlng);
+        }
+
+        // helper: create/update drop marker (small pin)
+        function setDropMarker(latlng){
+          if(!dropMarker){
+            dropMarker = new google.maps.Marker({ position: latlng, map, title: 'Dropoff', icon: { path: 'M12 2C8.7 2 6 4.7 6 8c0 3.9 5.7 10.5 5.9 10.8.1.1.3.1.4 0C12.3 18.5 18 12 18 8c0-3.3-2.7-6-6-6z', fillColor:'#ff7a59', fillOpacity:1, strokeWeight:0, scale:1.4, anchor: new google.maps.Point(12,24) } });
+          } else dropMarker.setPosition(latlng);
+        }
+
+        // animate assigned driver marker to a new location
+        // accepts optional title so assigned driver can show name
+        function updateDriverLocation(lat, lng, title){
+          if(!driverMarker){
+            const icon = { url: "{% static 'car.png' %}", scaledSize: new google.maps.Size(44,44) };
+            driverMarker = new google.maps.Marker({ position: {lat,lng}, map, title: title || 'Driver', icon });
+          } else {
+            if(title) driverMarker.setTitle(title);
+            // animate movement
+            const start = driverMarker.getPosition();
+            const fromLat = start.lat(), fromLng = start.lng();
+            const toLat = lat, toLng = lng;
+            const duration = 1200;
+            const t0 = performance.now();
+            function step(now){
+              const t = Math.min(1,(now-t0)/duration);
+              const latn = fromLat + (toLat-fromLat)*t;
+              const lngn = fromLng + (toLng-fromLng)*t;
+              driverMarker.setPosition({ lat: latn, lng: lngn });
+              if(t<1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+          }
+        }
+
+        // animate pulse around pickup
+        function startPulseAt(latlng){
+          stopPulse();
+          pickupCircle = new google.maps.Circle({
+            map,
+            center: latlng,
+            radius: 10,
+            strokeColor: '#2b9f6b',
+            strokeOpacity: 0.35,
+            strokeWeight: 1,
+            fillColor: '#2b9f6b',
+            fillOpacity: 0.12
+          });
+          let grow = 10;
+          let dir = 1;
+          pulseInterval = setInterval(() => {
+            grow += dir * 6;
+            if(grow > 200) dir = -1;
+            if(grow < 10) dir = 1;
+            pickupCircle.setRadius(grow);
+            const o = Math.max(0.05, 0.3 * (1 - grow/220));
+            pickupCircle.setOptions({ fillOpacity: o, strokeOpacity: o*1.2 });
+          }, 350);
+        }
+        function stopPulse(){ if(pulseInterval){ clearInterval(pulseInterval); pulseInterval = null; } if(pickupCircle){ pickupCircle.setMap(null); pickupCircle = null; } }
+
+        // draw route from origin->destination
+        function drawRoute(originLatLng, destLatLng){
+          if(!originLatLng || !destLatLng) return;
+          directionsService.route({
+            origin: originLatLng,
+            destination: destLatLng,
+            travelMode: 'DRIVING'
+          }, (res, status) => {
+            if(status === 'OK'){
+              directionsRenderer.setDirections(res);
+              setPickupMarker(originLatLng);
+              setDropMarker(destLatLng);
+              const bounds = new google.maps.LatLngBounds();
+              bounds.extend(originLatLng);
+              bounds.extend(destLatLng);
+              // also include polyline path (if available) for a slightly larger bbox
+              try{
+                const route = res.routes && res.routes[0];
+                if(route && route.overview_path){
+                  for(const p of route.overview_path) bounds.extend(p);
+                }
+              }catch(e){}
+
+              map.fitBounds(bounds);
+              if(map.getZoom()>16) map.setZoom(16);
+              // save route bounds for auto-cycling
+              ROUTE_BOUNDS = bounds;
+            } else {
+              console.warn('Directions failed:', status);
+              ROUTE_BOUNDS = null;
+            }
+          });
+        }
+
+        // clear nearby markers
+        function clearNearbyMarkers(){
+          Object.values(nearbyMarkers).forEach(m => m && m.setMap(null));
+          nearbyMarkers = {};
+        }
+
+        // format seconds to mm:ss (or "N min")
+        function formatEtaSeconds(s){
+          if(s == null) return '—';
+          if(s <= 0) return 'Arriving';
+          if(s >= 60) {
+            const m = Math.round(s / 60);
+            return `${m} min`;
+          }
+          const mm = Math.floor(s/60);
+          const ss = s % 60;
+          return (mm>0 ? `${mm}m ` : '') + `${ss}s`;
+        }
+
+        // update closest ETA UI and manage countdown timer
+        function startEtaCountdown(seconds){
+          if(closestEtaSec === seconds) return; // no change
+          closestEtaSec = seconds;
+          if(etaTimer) clearInterval(etaTimer);
+          document.getElementById('ui-closest-eta').textContent = formatEtaSeconds(closestEtaSec);
+          if(closestEtaSec == null) return;
+          etaTimer = setInterval(() => {
+            closestEtaSec = Math.max(0, closestEtaSec - 1);
+            document.getElementById('ui-closest-eta').textContent = formatEtaSeconds(closestEtaSec);
+            if(closestEtaSec <= 0){ clearInterval(etaTimer); etaTimer = null; }
+          }, 1000);
+        }
+        function stopEtaCountdown(){ if(etaTimer){ clearInterval(etaTimer); etaTimer = null; } closestEtaSec = null; document.getElementById('ui-closest-eta').textContent = '—'; }
+
+        // render list of nearby drivers (from API)
+        function renderNearbyDrivers(list){
+          const seen = new Set();
+          let closest = null;
+          for(const d of list){
+            const id = d.id || (`drv-${d.driver_id}`);
+            seen.add(id);
+            const pos = { lat: parseFloat(d.lat), lng: parseFloat(d.lng) };
+            if(nearbyMarkers[id]){
+              nearbyMarkers[id].setPosition(pos);
+            } else {
+              // IMPORTANT: use vehicle/type label for title while matching
+              const title = (d.vehicle && d.vehicle.trim()) ? `${d.vehicle} • MedWheels` : 'MedWheels Basic';
+              const m = new google.maps.Marker({
+                position: pos, map, title: title,
+                icon: { url: "{% static 'car.png' %}", scaledSize: new google.maps.Size(34,34) }
+              });
+              nearbyMarkers[id] = m;
+            }
+            // candidate for closest
+            const d_m = (d.distance_m != null) ? Number(d.distance_m) : null;
+            if(d_m != null){ if(!closest || d_m < closest.distance_m) closest = { distance_m: d_m, item: d }; }
+            else { if(CURRENT_RIDE && CURRENT_RIDE.pickup && d.lat != null && d.lng != null){ const dx = (d.lat - CURRENT_RIDE.pickup.lat) || 0; const dy = (d.lng - CURRENT_RIDE.pickup.lng) || 0; const approx = Math.abs(dx) + Math.abs(dy); if(!closest || approx < closest.approx) closest = { approx: approx, item: d }; } }
+          }
+
+          // cleanup stale markers
+          for(const k of Object.keys(nearbyMarkers)){
+            if(!seen.has(k)){ nearbyMarkers[k].setMap(null); delete nearbyMarkers[k]; }
+          }
+
+          // compute ETA if possible
+          if(closest && closest.distance_m != null){
+            const speed_m_per_s = (AVG_SPEED_KMPH * 1000) / 3600.0;
+            const seconds = Math.max(5, Math.round(closest.distance_m / speed_m_per_s));
+            startEtaCountdown(seconds);
+          } else { stopEtaCountdown(); }
+        }
+
+        // Poll server for nearby ambulances while matching (uses currentSearchRadius)
+        async function pollNearbyWhileMatching(lat, lng){
+          try {
+            const url = new URL(NEARBY_URL);
+            url.searchParams.set('lat', lat);
+            url.searchParams.set('lng', lng);
+            url.searchParams.set('radius_m', currentSearchRadius);
+            url.searchParams.set('max_results', 30);
+            const res = await fetch(url.toString(), { credentials: 'same-origin' });
+            if(!res.ok) throw new Error('nearby fetch failed');
+            const j = await res.json();
+            const list = j.ambulances || [];
+            renderNearbyDrivers(list);
+          } catch(err){ console.warn('pollNearbyWhileMatching err', err); }
+        }
+
+        // --- Map auto-cycle view functions ---
+        function showPickupView(){ if(!CURRENT_RIDE || !CURRENT_RIDE.pickup) return; const p = { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }; try{ map.panTo(p); map.setZoom(15); }catch(e){} }
+        function showDropView(){ if(!CURRENT_RIDE || !CURRENT_RIDE.drop) return; const d = { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) }; try{ map.panTo(d); map.setZoom(15); }catch(e){} }
+        function showRouteView(){ try{ if(ROUTE_BOUNDS){ map.fitBounds(ROUTE_BOUNDS); if(map.getZoom()>16) map.setZoom(16); } else if(CURRENT_RIDE && CURRENT_RIDE.pickup){ // fallback to both points
+            const bounds = new google.maps.LatLngBounds(); bounds.extend({lat:Number(CURRENT_RIDE.pickup.lat), lng:Number(CURRENT_RIDE.pickup.lng)}); if(CURRENT_RIDE.drop) bounds.extend({lat:Number(CURRENT_RIDE.drop.lat), lng:Number(CURRENT_RIDE.drop.lng)}); map.fitBounds(bounds); if(map.getZoom()>16) map.setZoom(16);
+          } }catch(e){}
+        }
+
+        function startMapCycle(){ stopMapCycle(); mapCycleIndex = 0; MAP_CYCLE_INTERVAL = setInterval(()=>{
+          if(!CURRENT_RIDE) return;
+          // decide available views
+          const hasPickup = !!(CURRENT_RIDE && CURRENT_RIDE.pickup);
+          const hasDrop = !!(CURRENT_RIDE && CURRENT_RIDE.drop);
+          if(!hasPickup) return;
+          // cycle through: pickup -> drop -> route (skip if not available)
+          if(mapCycleIndex === 0){ showPickupView(); }
+          else if(mapCycleIndex === 1){ if(hasDrop) showDropView(); else showRouteView(); }
+          else { showRouteView(); }
+          mapCycleIndex = (mapCycleIndex + 1) % 3;
+        }, MAP_CYCLE_MS); }
+        function stopMapCycle(){ if(MAP_CYCLE_INTERVAL){ clearInterval(MAP_CYCLE_INTERVAL); MAP_CYCLE_INTERVAL = null; } }
+
+        // --- Modal handling for no-drivers ---
+        const modalEl = document.getElementById('no-drivers-modal');
+        const modalMsgEl = document.getElementById('no-drivers-msg');
+
+        document.getElementById('no-drivers-close').addEventListener('click', () => { hideNoDriversModal(false); });
+        document.getElementById('no-drivers-retry').addEventListener('click', () => {
+          currentSearchRadius = Math.min(currentSearchRadius * RADIUS_GROW_FACTOR, MAX_SEARCH_RADIUS_M);
+          modalMsgEl.textContent = `Retrying with search radius ${Math.round(currentSearchRadius/1000)} km...`;
+          setTimeout(()=> hideNoDriversModal(true), 300);
+        });
+
+        function showNoDriversModal(message){ modalMsgEl.textContent = message || 'We could not find ambulances nearby.'; modalEl.style.display = 'flex'; modalEl.setAttribute('aria-hidden', 'false'); }
+        function hideNoDriversModal(retry){ modalEl.style.display = 'none'; modalEl.setAttribute('aria-hidden', 'true'); if(retry){ restartMatching(); } else { document.getElementById('left-title').textContent = 'No drivers available'; document.getElementById('summary-box').querySelector('.note').textContent = 'No drivers available nearby. Try again later or widen search radius.'; stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown(); currentSearchRadius = INITIAL_SEARCH_RADIUS_M; } }
+
+        // --- Cancel modals (confirm + result) ---
+        const cancelConfirmEl = document.getElementById('cancel-confirm-modal');
+        const cancelResultEl = document.getElementById('cancel-result-modal');
+        const cancelConfirmYes = document.getElementById('cancel-confirm-yes');
+        const cancelConfirmNo = document.getElementById('cancel-confirm-no');
+        const cancelResultOk = document.getElementById('cancel-result-ok');
+        const cancelResultMsg = document.getElementById('cancel-result-msg');
+
+        let _pendingCancelRideId = null;
+
+        function openCancelConfirm(rideId){ _pendingCancelRideId = rideId; cancelConfirmEl.style.display = 'flex'; cancelConfirmEl.setAttribute('aria-hidden', 'false'); }
+        function closeCancelConfirm(){ cancelConfirmEl.style.display = 'none'; cancelConfirmEl.setAttribute('aria-hidden', 'true'); _pendingCancelRideId = null; }
+        function openCancelResult(message, redirectAfterOk=true){ cancelResultMsg.textContent = message || 'Ride cancelled'; cancelResultEl.style.display = 'flex'; cancelResultEl.setAttribute('aria-hidden', 'false'); cancelResultOk.onclick = () => { cancelResultEl.style.display = 'none'; cancelResultEl.setAttribute('aria-hidden', 'true'); if(redirectAfterOk) window.location.href = '{% url "service" %}'; }; }
+
+        cancelConfirmNo.addEventListener('click', () => { closeCancelConfirm(); });
+        cancelConfirmYes.addEventListener('click', () => { const rid = _pendingCancelRideId || (CURRENT_RIDE && CURRENT_RIDE.id); closeCancelConfirm(); if(rid) doCancelRide(rid); });
+
+        async function doCancelRide(rideId){ if(!rideId) return; try { const res = await fetch(`/api_cancel_ride/${rideId}/`, { method:'POST', credentials:'same-origin', headers: { 'X-CSRFToken': csrftoken } }); let j = {}; try { j = await res.json(); } catch(e){} if(res.ok && j.ok){ openCancelResult('Your ride has been cancelled.'); } else { const err = j.error || 'Unable to cancel'; openCancelResult(err, false); } } catch(err){ console.error('cancel error', err); openCancelResult('Cancel failed (network).', false); } }
+
+        // --- UI state machine ---
+        let CURRENT_RIDE = null; // object { id, pickup, drop, fare }
+        let SOCKET = null;       // websocket connection (optional)
+
+        function setSummaryUI(pickup, drop, fare){
+          document.getElementById('ui-pickup').textContent = pickup.address || (pickup.lat + ',' + pickup.lng);
+          document.getElementById('ui-pickup-sub').textContent = pickup.short || '';
+          document.getElementById('ui-drop').textContent = drop ? (drop.address || (drop.lat + ',' + drop.lng)) : '—';
+          document.getElementById('ui-drop-sub').textContent = drop ? (drop.short || '') : '';
+          document.getElementById('ui-fare').textContent = (fare ? ('₹ ' + Number(fare).toFixed(2)) : '₹ —');
+          const mapAssigned = (tId, val)=>{ const el = document.getElementById(tId); if(el) el.textContent = val };
+          mapAssigned('ui-pickup-assigned', document.getElementById('ui-pickup').textContent);
+          mapAssigned('ui-pickup-sub-assigned', document.getElementById('ui-pickup-sub').textContent);
+          mapAssigned('ui-drop-assigned', document.getElementById('ui-drop').textContent);
+          mapAssigned('ui-drop-sub-assigned', document.getElementById('ui-drop-sub').textContent);
+          mapAssigned('ui-fare-assigned', document.getElementById('ui-fare').textContent);
+        }
+
+        function startProgressBar(timeoutMs = MATCH_TIMEOUT_MS){ stopProgressBar(); const bar = document.getElementById('match-progress'); progressStartTs = Date.now(); progressInterval = setInterval(() => { const elapsed = Date.now() - progressStartTs; const pct = Math.min(100, (elapsed / timeoutMs) * 100); bar.style.width = pct + '%'; if (elapsed >= timeoutMs) { stopProgressBar(); stopMatchingPolling(); stopPulse(); showNoDriversModal('No nearby ambulances found within the search radius. Would you like to retry matching?'); } }, MATCH_PROGRESS_TICK_MS); startMapCycle(); }
+        function stopProgressBar(){ const bar = document.getElementById('match-progress'); bar.style.width='0%'; if(progressInterval){ clearInterval(progressInterval); progressInterval = null; progressStartTs = null; } stopMapCycle(); }
+
+        function startMatchingPolling(lat, lng){ stopMatchingPolling(); pollNearbyWhileMatching(lat, lng); nearbyPollTimer = setInterval(()=> pollNearbyWhileMatching(lat, lng), NEARBY_POLL_MS); }
+        function stopMatchingPolling(){ if(nearbyPollTimer){ clearInterval(nearbyPollTimer); nearbyPollTimer = null; } }
+
+        function restartMatching(){ if(!CURRENT_RIDE || !CURRENT_RIDE.pickup) return; const lat = Number(CURRENT_RIDE.pickup.lat), lng = Number(CURRENT_RIDE.pickup.lng); document.getElementById('left-title').textContent = 'Finding available drivers'; document.getElementById('summary-box').querySelector('.note').textContent = "We'll share driver details shortly"; clearNearbyMarkers(); stopEtaCountdown(); startPulseAt({ lat, lng }); startProgressBar(); startMatchingPolling(lat, lng); }
+
+        // Public: startMatching
+        function startMatching(rideId, pickup, drop, fare){
+          CURRENT_RIDE = { id: rideId, pickup, drop, fare };
+          currentSearchRadius = INITIAL_SEARCH_RADIUS_M;
+          setSummaryUI(pickup, drop, fare);
+          const latlngPickup = { lat: Number(pickup.lat), lng: Number(pickup.lng) };
+          setPickupMarker(latlngPickup);
+          if(drop) setDropMarker({ lat: Number(drop.lat), lng: Number(drop.lng) });
+          if(drop) drawRoute(latlngPickup, { lat: Number(drop.lat), lng: Number(drop.lng) });
+          startPulseAt(latlngPickup);
+          startProgressBar();
+          startMatchingPolling(latlngPickup.lat, latlngPickup.lng);
+        }
+
+        function onMatchingFailed(){ stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown(); document.getElementById('left-title').textContent = 'No drivers available'; document.getElementById('summary-box').querySelector('.note').textContent = 'No drivers available nearby. Try again later or widen search radius.'; showNoDriversModal('No drivers were found. You can retry matching or try again later.'); }
+
+        function onDriverAssigned(driverObj){ stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown(); currentSearchRadius = INITIAL_SEARCH_RADIUS_M; const tpl = document.getElementById('assigned-template'); const left = document.getElementById('left-panel'); left.innerHTML = ''; left.appendChild(tpl.content.cloneNode(true)); document.getElementById('drv-photo').src = driverObj.photo_url || '{% static "img/default_driver.jpg" %}'; document.getElementById('drv-name').textContent = driverObj.name || 'Driver'; document.getElementById('drv-vehicle').textContent = (driverObj.vehicle_no || '') + (driverObj.vehicle_type ? (' • ' + driverObj.vehicle_type) : ''); document.getElementById('drv-eta').textContent = driverObj.eta_min ? ('Arriving in ' + driverObj.eta_min + ' min') : ''; if(driverObj.fare) document.getElementById('ui-fare-assigned').textContent = '₹ ' + Number(driverObj.fare).toFixed(2); setSummaryUI(CURRENT_RIDE.pickup, CURRENT_RIDE.drop, CURRENT_RIDE.fare); const cancelAssignedBtn = document.getElementById('cancel-assigned-btn'); if(cancelAssignedBtn) cancelAssignedBtn.addEventListener('click', function(){ openCancelConfirm(CURRENT_RIDE.id); }); if(driverObj.lat && driverObj.lng) { updateDriverLocation(Number(driverObj.lat), Number(driverObj.lng), driverObj.name || 'Driver'); } if(driverObj.lat && driverObj.lng){ drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) }, { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }); } else { if(CURRENT_RIDE.drop) drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }, { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) }); } }
+
+        function onDriverLocationUpdate(loc){ updateDriverLocation(Number(loc.lat), Number(loc.lng)); }
+
+        function cancelRide(rideId){ const rid = rideId || (CURRENT_RIDE && CURRENT_RIDE.id); if(!rid){ console.warn('no ride id to cancel'); return; } openCancelConfirm(rid); }
+
+        function connectRideSocket(rideId){ if(!rideId) return null; if(SOCKET){ SOCKET.close(); SOCKET = null; } const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'; const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`; SOCKET = new WebSocket(url); SOCKET.onopen = () => console.log('ride socket open', url); SOCKET.onmessage = (ev) => { try { const data = JSON.parse(ev.data); if(data.type === 'ride.assigned'){ onDriverAssigned(data.driver || {}); } else if(data.type === 'location.update'){ onDriverLocationUpdate(data); } else if(data.type === 'ride.matching_failed'){ onMatchingFailed(); } else if(data.type === 'ride.cancelled'){ openCancelResult('Ride cancelled by driver/system.', true); } else { console.log('ride socket msg', data); } } catch(e){ console.warn('socket parse error', e); } }; SOCKET.onclose = () => console.log('ride socket closed'); SOCKET.onerror = (err) => console.error('ride socket error', err); return SOCKET; }
+
+        document.getElementById('cancel-matching-btn').addEventListener('click', function(){ cancelRide(CURRENT_RIDE && CURRENT_RIDE.id); });
+
+        initMapFindDriver();
+
+        (function(){ try { const RIDE = {{ ride_json|safe }}; if(RIDE){ const pickup = { lat: RIDE.pickup.lat, lng: RIDE.pickup.lng, address: RIDE.pickup.address, short: '' }; const drop = RIDE.drop ? { lat: RIDE.drop.lat, lng: RIDE.drop.lng, address: RIDE.drop.address, short: '' } : null; setTimeout(()=> { startMatching(RIDE.ride_id, pickup, drop, RIDE.fare); connectRideSocket(RIDE.ride_id); }, 300); } } catch(e){ console.warn('no initial ride payload or parse error', e); } })();
+
+    </script>
+</body>
+</html>

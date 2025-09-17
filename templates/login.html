@@ -1,0 +1,457 @@
+
+{% load socialaccount %}
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>SignUp and Login</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <!-- fontawsome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
+        integrity="sha512-DxV+EoADOkOygM4IR9yXP8Sb2qwgidEmeqAEmDKIOfPRQZOWbXCzLC6vjbZyy0vPisbH2SyW27+ddLVCN+OMzQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=Montserrat:400,800');
+
+        :root {
+            --bg: #f6f5f7;
+            /* --hue1 : #FF4B2B; */
+            --hue1: #db2a2a;
+            --hue2: #ff3f6c;
+            /* --hue2 : #FF416C; */
+            --white: #FFFFFF;
+            --dark: #333;
+            --input: #eee;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        body {
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            font-family: 'Montserrat', sans-serif;
+            height: 100vh;
+            margin: -20px 0 50px;
+        }
+
+
+        h1 {
+            font-weight: bold;
+            margin: 0;
+        }
+
+
+        h2 {
+            text-align: center;
+        }
+
+
+        p {
+            font-size: 14px;
+            font-weight: 100;
+            line-height: 20px;
+            letter-spacing: 0.5px;
+            margin: 20px 0 30px;
+        }
+
+
+        span {
+            font-size: 12px;
+        }
+
+
+        a {
+            color: var(--dark);
+            font-size: 14px;
+            text-decoration: none;
+            margin: 15px 0;
+        }
+
+
+        button {
+            border-radius: 20px;
+            border: 1px solid var(--hue1);
+            background-color: var(--hue1);
+            color: var(--white);
+            font-size: 12px;
+            font-weight: bold;
+            padding: 12px 45px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: transform 80ms ease-in;
+            margin: 10px 0;
+        }
+
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+
+        button:focus {
+            outline: none;
+        }
+
+
+        button.ghost {
+            background-color: transparent;
+            border-color: var(--white);
+        }
+
+
+        form {
+            background-color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 0 50px;
+            height: 100%;
+            text-align: center;
+        }
+
+
+        input {
+            background-color: var(--input);
+            border: none;
+            padding: 12px 15px;
+            margin: 8px 0;
+            width: 100%;
+        }
+
+
+        .container {
+            background-color: var(--white);
+            border-radius: 10px;
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25),
+                0 10px 10px rgba(0, 0, 0, 0.22);
+            position: relative;
+            overflow: hidden;
+            width: 768px;
+            max-width: 100%;
+            min-height: 480px;
+        }
+
+
+        .form-container {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            transition: all 0.6s ease-in-out;
+        }
+
+
+        .sign-in-container {
+            left: 0;
+            width: 50%;
+            z-index: 2;
+        }
+
+
+        .container.right-panel-active .sign-in-container {
+            transform: translateX(100%);
+        }
+
+
+        .sign-up-container {
+            left: 0;
+            width: 50%;
+            opacity: 0;
+            z-index: 1;
+        }
+
+
+        .container.right-panel-active .sign-up-container {
+            transform: translateX(100%);
+            opacity: 1;
+            z-index: 5;
+            animation: show 0.6s;
+        }
+
+
+        @keyframes show {
+
+            0%,
+            49.99% {
+                opacity: 0;
+                z-index: 1;
+            }
+
+            50%,
+            100% {
+                opacity: 1;
+                z-index: 5;
+            }
+        }
+
+
+        .overlay-container {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 50%;
+            height: 100%;
+            overflow: hidden;
+            transition: transform 0.6s ease-in-out;
+            z-index: 100;
+        }
+
+
+        .container.right-panel-active .overlay-container {
+            transform: translateX(-100%);
+        }
+
+
+        .overlay {
+            background: var(--hue2);
+            background: -webkit-linear-gradient(to right, var(--hue1), var(--hue2));
+            background: linear-gradient(to right, var(--hue1), var(--hue2));
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-position: 0 0;
+            color: var(--white);
+            position: relative;
+            left: -100%;
+            height: 100%;
+            width: 200%;
+            transform: translateX(0);
+            transition: transform 0.6s ease-in-out;
+        }
+
+
+        .container.right-panel-active .overlay {
+            transform: translateX(50%);
+        }
+
+
+        .overlay-panel {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 0 40px;
+            text-align: center;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            transform: translateX(0);
+            transition: transform 0.6s ease-in-out;
+        }
+
+
+        .overlay-left {
+            transform: translateX(-20%);
+        }
+
+
+        .container.right-panel-active .overlay-left {
+            transform: translateX(0);
+        }
+
+
+        .overlay-right {
+            right: 0;
+            transform: translateX(0);
+        }
+
+
+        .container.right-panel-active .overlay-right {
+            transform: translateX(20%);
+        }
+
+
+        .social-container {
+            margin: 10px 0;
+        }
+
+
+        .social-container a {
+            border: 1px solid #DDDDDD;
+            border-radius: 20px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 5px;
+            padding: 10px 20px;
+            border: 1px solid gray;
+        }
+
+        .social-container a i {
+            padding-right: 20px;
+            font-size: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+        .error{
+            background: #ffe6e6;
+            color: #a00;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+
+    <div class="container" id="container">
+        <div class="form-container sign-up-container">
+
+            <form action="{% url 'signup' %}" method="POST">
+
+                {% csrf_token %}
+                <h1>Create Account</h1>
+                <!-- show signup error if exists -->
+                {% if error_signup %}
+                  <div class="error">{{ error_signup }}</div>
+                {% endif %}
+                <div class="social-container">
+                  <a href="{% provider_login_url 'google' %}" class="social">
+                    <i class="fa-solid fa-g"></i> Continue with Google
+                  </a>
+
+                </div>
+                <span>OR</span>
+                <input type="text" name="name" placeholder="Name" required>
+                <input type="email" name="email" placeholder="Email" required>
+                <input type="number" name="mobile" placeholder="Mobile No." required>
+                <input type="password" name="password" placeholder="Password" required>
+                <button type="submit">SignUp</button>
+            </form>
+
+        </div>
+        <div class="form-container sign-in-container">
+            <form action="{% url 'login' %}" method="POST">
+
+                {% csrf_token %}
+                <h1>Login</h1>
+                {% if error_login %}
+                  <div class="error">{{ error_login }}</div>
+                {% endif %}
+                <div class="social-container">
+                  <a href="{% provider_login_url 'google' %}" class="social">
+                      <i class="fa-solid fa-g"></i> Continue with Google
+                  </a>
+
+                </div>
+                <span>OR</span>
+                <input type="number" name="mobile" placeholder="Mobile No." required>
+                <input type="password" name="password" placeholder="Password" required>
+                <a href="#" id="forgot-password-link">Forgot Your Password ?</a>
+
+                <div id="otp-container" class="hidden">
+                    <span>OTP sent to Your Mobile Number</span>
+                    <input type="text" name="otp" placeholder="Enter OTP" id="otp-input">
+                    <button type="button" id="verify-otp-btn">Verify OTP</button>
+                </div>
+
+                <button type="submit">Login</button>
+            </form>
+        </div>
+        <div class="overlay-container">
+            <div class="overlay">
+                <div class="overlay-panel overlay-left">
+                    <h1>Welcome Back!</h1>
+                    <p>To keep connected with us please login to your profile.</p>
+                    <button class="ghost" id="signIn" type="button">Login</button>
+                </div>
+                <div class="overlay-panel overlay-right">
+                    <h1>Welcome to MedWheels <i class="fa-solid fa-hand-holding-medical"></i></h1>
+                    <p>Sign Up to start your journey with us.</p>
+                    <button class="ghost" id="signUp" type="button">Sign Up</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="text/javascript">
+document.addEventListener('DOMContentLoaded', function () {
+    const signUpButton = document.getElementById('signUp');
+    const signInButton = document.getElementById('signIn');
+    const container = document.getElementById('container');
+
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+    const otpContainer = document.getElementById('otp-container');
+    const verifyOtpBtn = document.getElementById('verify-otp-btn');
+    const otpInput = document.getElementById('otp-input');
+
+    // Safe attach — check existence before adding listeners
+    if (signUpButton) {
+        signUpButton.addEventListener('click', function () {
+            container.classList.add("right-panel-active");
+        });
+    }
+    if (signInButton) {
+        signInButton.addEventListener('click', function () {
+            container.classList.remove("right-panel-active");
+        });
+    }
+
+    if (forgotPasswordLink && otpContainer) {
+        forgotPasswordLink.addEventListener('click', function (event) {
+            event.preventDefault();
+            otpContainer.classList.remove('hidden');
+        });
+    }
+
+    if (verifyOtpBtn && otpInput) {
+        verifyOtpBtn.addEventListener('click', function () {
+            const enteredOtp = otpInput.value;
+            if (enteredOtp === "123456") {
+                alert("OTP Verified!");
+                verifyOtpBtn.classList.add('hidden');
+            } else {
+                alert("Invalid OTP. Please try again.");
+            }
+        });
+    }
+
+    // server-provided variable (escaped)
+    const serverShow = "{{ show|default:''|escapejs }}";
+    const signupSuccess = "{{ signup_success|default:''|escapejs }}";
+
+    // Also check URL params (redirects use ?show=login or ?signup=1)
+    const params = new URLSearchParams(window.location.search);
+    const paramShow = params.get('show');
+
+    const show = paramShow || serverShow;
+
+    if (show === 'signup') {
+        container.classList.add("right-panel-active");
+    } else {
+        container.classList.remove("right-panel-active");
+    }
+
+    if (params.get('signup') === '1' || signupSuccess === '1') {
+        alert('Signup successful. Please login.');
+        if (history.replaceState) {
+            const url = new URL(window.location);
+            url.searchParams.delete('signup');
+            url.searchParams.delete('show');
+            window.history.replaceState({}, document.title, url.toString());
+        }
+    }
+});
+</script>
+
+
+
+
+
+</body>
+
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedWheels - Driver Application Form</title>
+    <style>
+        :root {
+            --brand: #dc3545;
+            --accent: #76df8e;
+            --ink: #222;
+            --muted: #6c757d;
+            --bg: #ffffff;
+            --chip: #f6f8ff;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--chip);
+            color: var(--ink);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 750px;
+            margin: auto;
+            background: var(--bg);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--brand);
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+            color: var(--ink);
+        }
+
+        label.required::after {
+            content: " *";
+            color: var(--brand);
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 18px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input[type="file"] {
+            padding: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .gender-options {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .gender-options input {
+            width: 20px;
+        }
+
+        .consent {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .consent input{
+            width: 20px;
+        }
+
+        button {
+            background-color: var(--brand);
+            color: #fff;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #b52a37;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Driver Application Form</h1>
+        <form action="{% url 'driver_application' %}" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label class="required">Full Name</label>
+                <input type="text" name="fullname" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Gender</label>
+                <div class="gender-options">
+                    <input type="radio" id="male" name="gender" value="male" required>
+                    <label for="male">Male</label>
+
+                    <input type="radio" id="female" name="gender" value="female">
+                    <label for="female">Female</label>
+
+                    <input type="radio" id="other" name="gender" value="other">
+                    <label for="other">Other</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Recent Passport-size Photo</label>
+                <input type="file" name="photo" accept=".jpg, .jpeg, .png" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Email Address</label>
+                <input type="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Mobile / Phone Number</label>
+                <input type="tel" name="phone" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Date of Birth</label>
+                <input type="date" name="dob" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Permanent / Current Address</label>
+                <textarea name="address" rows="3" required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Driving License Number</label>
+                <input type="text" name="license_no" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">License Issue Date</label>
+                <input type="date" name="issue_date" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">License Expiry Date</label>
+                <input type="date" name="expiry_date" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Primary Vehicle Number / Preferred Vehicle Type</label>
+                <input type="text" name="vehicle" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Driving License Scan / Photo (Upload)</label>
+                <input type="file" name="license_scan" accept=".pdf, .jpg, .jpeg, .png" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Driving Experience (Years)</label>
+                <input type="number" name="experience" min="0" required>
+            </div>
+
+            <div class="form-group">
+                <label for="id-card" class="required">Government ID Number</label>
+                <input type="text" id="id-card" name="id-card" required>
+            </div>
+
+            <div class="form-group">
+                <label class="required">Government ID (Upload: Aadhaar / Passport / National ID)</label>
+                <input type="file" name="gov_id" accept=".pdf, .jpg, .jpeg, .png" required>
+            </div>
+
+
+
+            <div class="form-group">
+                <label class="required">Emergency Contact (Name, Relationship, Phone)</label>
+                <input type="text" name="emergency_contact" placeholder="e.g. John Doe, Brother, +91-9876543210"
+                    required>
+            </div>
+
+            <div class="consent">
+                <input type="checkbox" name="consent" required>
+                <label class="required">I certify that all documents and information provided are correct. I agree to
+                    the Terms & Conditions.</label>
+            </div>
+
+            <button type="submit">Submit for Verification</button>
+        </form>
+    </div>
+</body>
+
+</html>

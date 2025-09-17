@@ -1,0 +1,947 @@
+<!-- templates/service.html (Autocomplete: top-N details, distance-sort, session tokens, caching) -->
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MedWheels — Book Ambulance Services</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <style>
+    :root{
+      --bg:#fff; --card:#fbfbfb; --brand:#dc3545; --accent:#52ce8a; --accent2:#47b97a;
+      --ink:#222; --muted:#6c757d; --chip:#f6f8ff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;background:var(--chip);color:var(--ink);padding-top:60px}
+    nav{position:fixed;top:0;left:0;right:0;height:60px;background:var(--brand);display:flex;align-items:center;justify-content:space-between;padding:10px;z-index:100}
+    .logo{color:var(--chip);font-family:Verdana, Geneva, Tahoma, sans-serif}
+    .wrap{max-width:1200px;margin:20px auto;display:flex;gap:18px;padding:8px 16px}
+    .left{width:420px;background:var(--card);padding:20px;border-radius:12px;box-shadow:0 6px 18px rgba(20,20,20,.04)}
+    .left h2{color:var(--brand);margin-bottom:12px}
+    .form-row{margin-bottom:12px}
+    .input{display:flex;align-items:center;gap:8px;background:#fff;border-radius:8px;padding:10px;border:1px solid #e6e9ee; position:relative}
+    .input input{border:0;outline:0;width:100%;font-size:15px;padding:6px 0}
+    .small{font-size:13px;color:var(--muted)}
+    .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:0;background:var(--accent);color:var(--bg);cursor:pointer}
+    .btn:hover{background:var(--accent2)}
+    .ghost{background:transparent;border:0;color:var(--accent);cursor:pointer}
+    .clear-button{background:var(--brand);color:var(--chip);padding:10px 14px;border-radius:8px;border:1px solid #ddd}
+    .mapwrap{flex:1;height:400px;border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(20,20,20,.06)}
+    #map{width:100%;height:100%}
+    .note{font-size:13px;color:var(--muted);margin-top:8px}
+    .result-box{margin-top:12px;background:#fff;padding:12px;border-radius:8px;border:1px dashed #eee}
+    .hidden{display:none}
+
+    /* Suggestions dropdown (custom) - matches screenshot style */
+    .mw-suggestions {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      top: calc(100% + 8px);
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(20,20,20,0.08);
+      max-height: 320px;
+      overflow: auto;
+      z-index: 1500;
+      border: 1px solid #eee;
+      padding: 6px;
+    }
+    .mw-suggest-item {
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      padding:12px 10px;
+      border-radius:8px;
+      cursor:pointer;
+      transition: background .12s, transform .06s;
+      border-bottom: 1px solid rgba(0,0,0,0.03);
+    }
+    .mw-suggest-item:last-child { border-bottom: none; }
+    .mw-suggest-item:hover, .mw-suggest-item.active {
+      background: #fffaf9;
+      transform: translateY(-1px);
+    }
+    .mw-suggest-icon {
+      min-width:36px; min-height:36px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      background:#f6f6f6; color:#000; font-size:13px;
+      border:1px solid #eee;
+    }
+    .mw-suggest-text { flex:1 }
+    .mw-suggest-title { font-weight:700; color:#111; margin-bottom:6px; font-size:15px }
+    .mw-suggest-sub { font-size:13px; color:var(--muted); line-height:1.25 }
+    .mw-suggest-meta { font-size:12px; color:#666; margin-left:8px; white-space:nowrap }
+
+    /* spinner */
+    .mw-spinner { width:18px;height:18px;border-radius:50%;border:3px solid #eee;border-top-color:var(--brand); animation:spin .9s linear infinite; display:inline-block; vertical-align:middle }
+    @keyframes spin { to { transform: rotate(360deg) } }
+
+    /* scrollbar small */
+    .mw-suggestions::-webkit-scrollbar { width:8px; }
+    .mw-suggestions::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius:8px; }
+    .mw-suggestions::-webkit-scrollbar-track { background: transparent; }
+
+    /* Ambulance card styles */
+    .ambulance-card{display:flex;gap:12px;align-items:center;padding:12px;border-radius:12px;border:1px solid #e9ecef;margin-bottom:10px;cursor:pointer;background:#fff}
+    .ambulance-card.selected{border-color:var(--brand);box-shadow:0 6px 14px rgba(98,1,1,0.06);background:#fffaf9}
+    .ambulance-card img{width:84px;height:56px;object-fit:cover;border-radius:8px}
+    .ambulance-card .meta{flex:1}
+    .ambulance-card .meta .title{font-weight:700}
+    .ambulance-card .meta .sub{font-size:13px;color:#666;margin-top:6px}
+    .top-summary{padding:12px;border-radius:12px;border:1px solid #eee;margin-bottom:12px;background:#fff}
+    .request-btn{display:block;width:100%;padding:14px;border-radius:10px;background:#000;color:#fff;font-weight:700;text-align:center;border:0;cursor:pointer}
+    .request-btn:disabled{opacity:.6;cursor:not-allowed}
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-left"><h3 class="logo">MedWheels <i class="fa-solid fa-hand-holding-medical"></i></h3></div>
+  </nav>
+
+  <div class="wrap">
+    <div class="left">
+      <h2 id="panel-title">Get a ride</h2>
+
+      <!-- Top inputs (always visible in "search" state) -->
+      <div id="search-block">
+        <div class="form-row">
+          <label class="small">Pickup location</label>
+          <div class="input" id="pickup-input-wrap">
+            <span>📍</span>
+            <input id="pickup-input" placeholder="Enter pickup location" autocomplete="off" />
+            <!-- suggestions -->
+            <div id="pickup-suggestions" class="mw-suggestions hidden" role="listbox" aria-label="Pickup suggestions"></div>
+          </div>
+          <div style="margin-top:6px" class="controls">
+            <button id="use-location" class="ghost"><i class="fa-solid fa-location-crosshairs"></i> Use my current location</button>
+            <span class="small" id="pick-coords"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="small">Dropoff location</label>
+          <div class="input" id="drop-input-wrap">
+            <span>🏁</span>
+            <input id="drop-input" placeholder="Enter dropoff location" autocomplete="off" />
+            <!-- suggestions -->
+            <div id="drop-suggestions" class="mw-suggestions hidden" role="listbox" aria-label="Dropoff suggestions"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <button id="see-prices" class="btn">Get Fare</button>
+          <button id="clear-btn" class="clear-button" style="margin-left:8px">Clear</button>
+        </div>
+      </div>
+
+      <!-- After "Get Fare" this becomes the selection area -->
+      <div id="choose-block" class="hidden">
+        <!-- top summary (pickup -> drop) -->
+        <div id="top-summary" class="top-summary"></div>
+
+        <h3 style="margin:12px 0 8px">Rides we think you'll like</h3>
+        <div id="ambulance_options"></div>
+
+        <!-- Selected panel with Request button -->
+        <div id="selected_panel" class="result-box hidden" style="margin-top:12px">
+          <div id="selected_info"></div>
+          <div style="margin-top:8px">
+            <button id="book_now" class="request-btn">Request MedWheels Basic</button>
+            <button id="back_to_search" class="clear-button" style="margin-top:8px;width:100%">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:10px">Tip: enable location in your browser to auto-fill pickup.</div>
+    </div>
+
+    <div class="mapwrap">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <footer class="footer" style="margin-top:18px">
+    <div class="foot-container">
+      <small>© <span id="yr"></span> MedWheels — All rights reserved.</small>
+      <small><a href="#" style="color:var(--brand)">Privacy</a> · <a href="#" style="color:var(--brand)">Terms</a></small>
+    </div>
+  </footer>
+
+  <!-- Google Maps API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=places"></script>
+
+  <script>
+    // ---------- small helpers ----------
+    document.getElementById('yr').textContent = new Date().getFullYear();
+    function getCookie(name){ const v = document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return v ? decodeURIComponent(v.pop()) : ''; }
+    const csrftoken = getCookie('csrftoken');
+
+    const pickupInput = document.getElementById('pickup-input');
+    const dropInput   = document.getElementById('drop-input');
+    const pickupSugEl = document.getElementById('pickup-suggestions');
+    const dropSugEl   = document.getElementById('drop-suggestions');
+
+    const useLocationBtn = document.getElementById('use-location');
+    const pickCoords = document.getElementById('pick-coords');
+    const seePricesBtn = document.getElementById('see-prices');
+    const ambulanceOptionsDiv = document.getElementById('ambulance_options');
+    const selectedPanel = document.getElementById('selected_panel');
+    const selectedInfo = document.getElementById('selected_info');
+    const topSummary = document.getElementById('top-summary');
+    const panelTitle = document.getElementById('panel-title');
+
+    const ambulanceThumb = "{% static 'ambulance1.jpg' %}";
+    const ambulanceIconUrl = "{% static 'car.png' %}";
+
+    // map state
+    let map, geocoder, placesService;
+    let pickupCoord = null, dropCoord = null;
+    let userMarker = null, dropMarker = null, accuracyCircle = null;
+    let directionsService = null, directionsRenderer = null;
+    let smoothedUserPos = null;
+    const USER_SMOOTH_ALPHA = 0.25;
+    const USER_ANIM_DURATION = 1200;
+    const DRIVER_ANIM_DURATION = 3000;
+
+    // markers & polling
+    let nearbyDriverMarkers = {}; // id -> { marker, last, anim }
+    let lastPollAt = 0;
+    const MIN_POLL_MS = 6000;
+    const POLL_INTERVAL = 9000;
+    let pollingTimer = null;
+
+    // selection state
+    let selectedType = null;
+    let lastEstimate = null; // {available, eta_min, fare, distance_m}
+
+    // map camera defaults
+    const DEFAULT_CENTER = { lat: {{DEFAULT_MAP_CENTER.0|default:22.5726 }}, lng: {{DEFAULT_MAP_CENTER.1|default:88.3639 }} };
+    const DEFAULT_ZOOM = 14;
+    const USER_ZOOM = 15;
+
+    function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+    function easeInOutQuad(t){ return t<0.5 ? 2*t*t : -1 + (4-2*t)*t; }
+
+    // animate helper
+    function animateMarkerTo(markerObj, toLatLng, duration=2000){
+      if(!markerObj || !markerObj.marker) return;
+      const marker = markerObj.marker;
+      const start = marker.getPosition();
+      if(!start){ marker.setPosition(toLatLng); return; }
+      const fromLat = start.lat(), fromLng = start.lng();
+      const toLat = parseFloat(toLatLng.lat), toLng = parseFloat(toLatLng.lng);
+      if(Math.abs(fromLat-toLat)<1e-7 && Math.abs(fromLng-toLng)<1e-7) return;
+      if(markerObj.anim && markerObj.anim.frame) cancelAnimationFrame(markerObj.anim.frame);
+      const anim = { start: performance.now(), duration, fromLat, fromLng, toLat, toLng, frame:null };
+      markerObj.anim = anim;
+      function step(now){
+        const t = Math.min(1,(now-anim.start)/anim.duration);
+        const eased = easeInOutQuad(t);
+        const lat = anim.fromLat + (anim.toLat - anim.fromLat) * eased;
+        const lng = anim.fromLng + (anim.toLng - anim.fromLng) * eased;
+        marker.setPosition({ lat, lng });
+        if(t<1) anim.frame = requestAnimationFrame(step);
+        else anim.frame = null;
+      }
+      anim.frame = requestAnimationFrame(step);
+    }
+
+    // smooth user marker + accuracy circle
+    function updateUserLocation(rawPos, accuracy){
+      if(!rawPos) return;
+      if(!smoothedUserPos) smoothedUserPos = { lat: rawPos.lat, lng: rawPos.lng };
+      else {
+        smoothedUserPos.lat = smoothedUserPos.lat * (1-USER_SMOOTH_ALPHA) + rawPos.lat * USER_SMOOTH_ALPHA;
+        smoothedUserPos.lng = smoothedUserPos.lng * (1-USER_SMOOTH_ALPHA) + rawPos.lng * USER_SMOOTH_ALPHA;
+      }
+      if(!userMarker){
+        userMarker = new google.maps.Marker({
+          position: smoothedUserPos, map, title:'Pickup (you)',
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale:7, fillColor:'#2f80ed', fillOpacity:1, strokeWeight:2, strokeColor:'#fff' }
+        });
+      } else {
+        animateMarkerTo({ marker: userMarker }, smoothedUserPos, USER_ANIM_DURATION);
+      }
+      if(accuracy==null) accuracy=25;
+      if(!accuracyCircle){
+        accuracyCircle = new google.maps.Circle({ strokeColor:'#2f80ed', strokeOpacity:0.45, strokeWeight:1, fillColor:'#2f80ed', fillOpacity:0.12, map, center: smoothedUserPos, radius: accuracy });
+      } else {
+        accuracyCircle.setCenter(smoothedUserPos);
+        accuracyCircle.setRadius(accuracy);
+      }
+    }
+
+    // Poll backend for nearby live drivers (generic markers)
+    async function pollNearbyDrivers(force=false){
+      if(!pickupCoord) return;
+      const now = Date.now();
+      if(!force && (now - lastPollAt) < MIN_POLL_MS) return;
+      lastPollAt = now;
+      try {
+        const url = new URL("{% url 'api_nearby_ambulances' %}", window.location.origin);
+        url.searchParams.set('lat', pickupCoord.lat);
+        url.searchParams.set('lng', pickupCoord.lng);
+        url.searchParams.set('radius_m', 5000);
+        url.searchParams.set('max_results', 30);
+        const res = await fetch(url.toString(), { credentials: 'same-origin' });
+        if(!res.ok) throw new Error('nearby fetch failed');
+        const j = await res.json();
+        const list = j.ambulances || [];
+        const seen = new Set();
+        for(const a of list){
+          const id = (a.id) ? String(a.id) : `drv-${a.driver_id}`;
+          seen.add(id);
+          const pos = { lat: parseFloat(a.lat), lng: parseFloat(a.lng) };
+          if(nearbyDriverMarkers[id]){
+            animateMarkerTo(nearbyDriverMarkers[id], pos, DRIVER_ANIM_DURATION);
+            nearbyDriverMarkers[id].last = pos;
+          } else {
+            const m = new google.maps.Marker({
+              position: pos, map, title: 'MedWheels Basic',
+              icon: { url: ambulanceIconUrl, scaledSize: new google.maps.Size(40,40) }
+            });
+            const infoContent = `<div><strong>MedWheels Basic</strong><div class="small">${escapeHtml(a.vehicle||'')}</div></div>`;
+            const info = new google.maps.InfoWindow({ content: infoContent });
+            m.addListener('click', ()=> info.open(map,m));
+            nearbyDriverMarkers[id] = { marker: m, last: pos, anim: null };
+          }
+        }
+        // cleanup
+        for(const id of Object.keys(nearbyDriverMarkers)){
+          if(!seen.has(id)){
+            const obj = nearbyDriverMarkers[id];
+            if(obj && obj.marker) obj.marker.setMap(null);
+            delete nearbyDriverMarkers[id];
+          }
+        }
+      } catch(err){
+        console.warn('pollNearbyDrivers error', err);
+      }
+    }
+
+    function startPeriodicPolling(){ if(pollingTimer) return; pollNearbyDrivers(true).catch(()=>{}); pollingTimer = setInterval(()=> pollNearbyDrivers(false), POLL_INTERVAL); }
+    function stopPeriodicPolling(){ if(pollingTimer){ clearInterval(pollingTimer); pollingTimer = null; } }
+
+    // Initialize map & places
+    // (We will use our custom AutocompleteService, not google's injected dropdown)
+    function initMap(){
+      geocoder = new google.maps.Geocoder();
+      map = new google.maps.Map(document.getElementById('map'), { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, streetViewControl:false });
+      // prepare directions renderer/service
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers:true, map });
+
+      // Try to get user location immediately and center map there
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(pos => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude;
+          pickupCoord = { lat, lng };
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if(status === 'OK' && results[0]) pickupInput.value = results[0].formatted_address;
+            pickCoords.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            map.panTo({ lat, lng });
+            map.setZoom(USER_ZOOM);
+            updateUserLocation(pickupCoord, pos.coords.accuracy);
+            pollNearbyDrivers(true).catch(()=>{}); startPeriodicPolling();
+          });
+          // watch for continuous updates
+          startWatchPosition();
+        }, err => {
+          console.warn('initial geolocation failed', err);
+          map.panTo(DEFAULT_CENTER);
+        }, { enableHighAccuracy:true, timeout:8000 });
+      } else {
+        map.panTo(DEFAULT_CENTER);
+      }
+
+      // wire custom autocomplete after map init
+      ensurePlacesServices();
+      attachCustomAutocomplete(pickupInput, pickupSugEl, (place) => {
+        pickupInput.value = place.address || place.name || '';
+        if(place.lat != null && place.lng != null){
+          pickupCoord = { lat: Number(place.lat), lng: Number(place.lng) };
+          document.getElementById('pick-coords').textContent = `${pickupCoord.lat.toFixed(6)}, ${pickupCoord.lng.toFixed(6)}`;
+          map.panTo({ lat: pickupCoord.lat, lng: pickupCoord.lng });
+          map.setZoom(USER_ZOOM);
+          updateUserLocation(pickupCoord, null);
+          pollNearbyDrivers(true).catch(()=>{}); startPeriodicPolling();
+        }
+        pickupSugEl.classList.add('hidden');
+      });
+
+      attachCustomAutocomplete(dropInput, dropSugEl, (place) => {
+        dropInput.value = place.address || place.name || '';
+        if(place.lat != null && place.lng != null){
+          dropCoord = { lat: Number(place.lat), lng: Number(place.lng) };
+          if(!dropMarker){
+            dropMarker = new google.maps.Marker({
+              position: dropCoord, map, title: 'Dropoff',
+              icon: { path:'M12 2C8.7 2 6 4.7 6 8c0 3.9 5.7 10.5 5.9 10.8.1.1.3.1.4 0C12.3 18.5 18 12 18 8c0-3.3-2.7-6-6-6z', fillColor:'#ff7a59', fillOpacity:1, strokeWeight:0, scale:1.4, anchor: new google.maps.Point(12,24) }
+            });
+          } else {
+            animateMarkerTo({ marker: dropMarker }, dropCoord, 900);
+          }
+          buildRouteIfNeeded();
+        }
+        dropSugEl.classList.add('hidden');
+      });
+    }
+
+    // watch position
+    function startWatchPosition(){
+      if(!navigator.geolocation) return;
+      if(window._mw_watch_id) return;
+      window._mw_watch_id = navigator.geolocation.watchPosition(pos => {
+        const raw = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        pickupCoord = raw;
+        pickCoords.textContent = `${raw.lat.toFixed(6)}, ${raw.lng.toFixed(6)}`;
+        updateUserLocation(raw, pos.coords.accuracy);
+        pollNearbyDrivers(false).catch(()=>{});
+      }, err => { console.warn('watchPosition error', err); }, { enableHighAccuracy:true, maximumAge:2000, timeout:8000 });
+    }
+    function stopWatchPosition(){ if(window._mw_watch_id){ navigator.geolocation.clearWatch(window._mw_watch_id); window._mw_watch_id = null; } }
+
+    // Render candidate markers from estimate (generic markers)
+    function renderCandidateMarkersFromEstimate(candidates){
+      try {
+        const seen = new Set();
+        candidates.forEach(a => {
+          const id = (a.driver_id ? `drv-${a.driver_id}` : String(a.driver_id || a.id || Math.random()));
+          seen.add(id);
+          const pos = { lat: parseFloat(a.lat), lng: parseFloat(a.lng) };
+          if(nearbyDriverMarkers[id]){
+            animateMarkerTo(nearbyDriverMarkers[id], pos, DRIVER_ANIM_DURATION);
+            nearbyDriverMarkers[id].last = pos;
+          } else {
+            const m = new google.maps.Marker({
+              position: pos, map, title: 'MedWheels Basic',
+              icon: { url: ambulanceIconUrl, scaledSize: new google.maps.Size(40,40) }
+            });
+            const infoContent = `<div><strong>MedWheels Basic</strong><div class="small">${escapeHtml(a.vehicle||'')}</div></div>`;
+            const info = new google.maps.InfoWindow({ content: infoContent });
+            m.addListener('click', ()=> info.open(map,m));
+            nearbyDriverMarkers[id] = { marker: m, last: pos, anim: null };
+          }
+        });
+        // remove leftover markers not seen
+        for(const id of Object.keys(nearbyDriverMarkers)){
+          if(!seen.has(id)){
+            const obj = nearbyDriverMarkers[id];
+            if(obj && obj.marker) obj.marker.setMap(null);
+            delete nearbyDriverMarkers[id];
+          }
+        }
+      } catch(e){ console.warn('renderCandidateMarkersFromEstimate err', e); }
+    }
+
+    // Switch UI: show choose-block (summary + cards)
+    function showChooseView(){
+      document.getElementById('search-block').classList.add('hidden');
+      document.getElementById('choose-block').classList.remove('hidden');
+      panelTitle.textContent = 'Choose a ride';
+
+      // fill top summary
+      const paddr = escapeHtml(pickupInput.value || 'Pickup');
+      const daddr = escapeHtml(dropInput.value || '—');
+      topSummary.innerHTML = `<div style="font-weight:700">${paddr} → ${daddr}</div><div style="color:#666;margin-top:6px">Leave now</div>`;
+      ambulanceOptionsDiv.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+
+    function showSearchView(){
+      document.getElementById('choose-block').classList.add('hidden');
+      document.getElementById('search-block').classList.remove('hidden');
+      panelTitle.textContent = 'Get a ride';
+      selectedPanel.classList.add('hidden');
+      selectedType = null;
+    }
+
+    // Render ambulance card(s)
+    function renderAmbulanceOptions(){
+      ambulanceOptionsDiv.innerHTML = '';
+      const card = document.createElement('div');
+      card.className = 'ambulance-card';
+      card.dataset.type = 'medwheels_basic';
+      let etaText = lastEstimate && lastEstimate.available ? `${lastEstimate.eta_min} min` : '—';
+      let fareText = lastEstimate && lastEstimate.available ? `₹ ${lastEstimate.fare}` : '—';
+      card.innerHTML = `
+        <img src="${ambulanceThumb}" alt="MedWheels Basic">
+        <div class="meta">
+          <div class="title">MedWheels Basic</div>
+          <div class="sub">ETA: <strong>${escapeHtml(etaText)}</strong> • Fare est: <strong>${escapeHtml(fareText)}</strong></div>
+          <div class="sub" style="margin-top:6px">A basic ambulance option. Nearby drivers will be offered the request once you book.</div>
+        </div>
+      `;
+      ambulanceOptionsDiv.appendChild(card);
+
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.ambulance-card').forEach(c=>c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedType = card.dataset.type;
+        selectedPanel.classList.remove('hidden');
+        selectedInfo.innerHTML = `<div style="font-weight:700">MedWheels Basic</div><div style="color:#666;margin-top:6px">ETA: ${lastEstimate && lastEstimate.available ? lastEstimate.eta_min + ' min' : '—'} • Fare est: ${lastEstimate && lastEstimate.available ? '₹ ' + lastEstimate.fare : '—'}</div>`;
+        selectedPanel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      });
+    }
+
+    // Build route on the map if dropCoord exists (draw directions)
+    function buildRouteIfNeeded(){
+      if(!pickupCoord || !dropCoord || !directionsService || !directionsRenderer) {
+        if(directionsRenderer) directionsRenderer.set('directions', null);
+        return;
+      }
+      const req = { origin: { lat: pickupCoord.lat, lng: pickupCoord.lng }, destination: { lat: dropCoord.lat, lng: dropCoord.lng }, travelMode: 'DRIVING' };
+      directionsService.route(req, (res,status) => {
+        if(status === 'OK'){
+          directionsRenderer.setDirections(res);
+          if(userMarker) userMarker.setMap(map);
+          if(!dropMarker){
+            dropMarker = new google.maps.Marker({ position: dropCoord, map, title:'Dropoff', icon: { path:'M12 2C8.7 2 6 4.7 6 8c0 3.9 5.7 10.5 5.9 10.8.1.1.3.1.4 0C12.3 18.5 18 12 18 8c0-3.3-2.7-6-6-6z', fillColor:'#ff7a59', fillOpacity:1, strokeWeight:0, scale:1.4, anchor: new google.maps.Point(12,24) } });
+          } else {
+            dropMarker.setPosition(dropCoord);
+          }
+
+          // Fit bounds to show route and nearby vehicles
+          const bounds = new google.maps.LatLngBounds();
+          bounds.extend(new google.maps.LatLng(pickupCoord.lat, pickupCoord.lng));
+          bounds.extend(new google.maps.LatLng(dropCoord.lat, dropCoord.lng));
+          Object.values(nearbyDriverMarkers).forEach(o => {
+            if(o && o.last) bounds.extend(new google.maps.LatLng(o.last.lat, o.last.lng));
+          });
+          map.fitBounds(bounds);
+          const MAX_AUTO_ZOOM = 16;
+          if(map.getZoom() > MAX_AUTO_ZOOM) map.setZoom(MAX_AUTO_ZOOM);
+        } else {
+          console.warn('directions failed', status);
+        }
+      });
+    }
+
+    // GET FARE handler -> request estimate and switch to choose view
+    async function onSeePrices(e){
+      e && e.preventDefault && e.preventDefault();
+      if(!pickupCoord){ alert('Please enter pickup location or use "Use my location"'); return; }
+      seePricesBtn.disabled = true; const origText = seePricesBtn.textContent; seePricesBtn.textContent = 'Finding ambulances…';
+      try {
+        // save session search (best-effort)
+        try {
+          const payloadSession = { pickup: { address: pickupInput.value||'', lat: pickupCoord.lat, lng: pickupCoord.lng }, dropoff: dropCoord ? { address: dropInput.value||'', lat: dropCoord.lat, lng: dropCoord.lng } : null };
+          await fetch('{% url "service_see_price" %}', { method:'POST', credentials:'same-origin', headers:{ 'Content-Type':'application/json','X-CSRFToken': csrftoken }, body: JSON.stringify(payloadSession) });
+        } catch(e){ /* ignore */ }
+
+        const res = await fetch('{% url "api_estimate" %}', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type':'application/json','X-CSRFToken': csrftoken },
+          body: JSON.stringify({ pickup: { lat: pickupCoord.lat, lng: pickupCoord.lng, address: pickupInput.value||'' }, dropoff: dropCoord ? { lat: dropCoord.lat, lng: dropCoord.lng, address: dropInput.value||'' } : null })
+        });
+        const j = await res.json();
+        if(!res.ok || !j.ok) throw new Error(j.error || 'estimate failed');
+
+        const candidates = j.candidates || [];
+        if(!candidates.length){
+          lastEstimate = { available:false };
+        } else {
+          let minETA = Infinity, minFare = Infinity, minDist = Infinity;
+          candidates.forEach(c => {
+            const eta = Number(c.eta_min || 0);
+            const fare = Number(c.fare || 0);
+            const dist = Number(c.distance_m || 0);
+            if(eta < minETA) minETA = eta;
+            if(fare < minFare) minFare = fare;
+            if(dist < minDist) minDist = dist;
+          });
+          lastEstimate = { available:true, eta_min: Math.round(minETA), fare: Number(minFare).toFixed(2), distance_m: Math.round(minDist) };
+        }
+
+        // render UI & markers
+        renderAmbulanceOptions();
+        renderCandidateMarkersFromEstimate(candidates);
+        showChooseView();
+
+        // render route if drop present
+        buildRouteIfNeeded();
+      } catch(err){
+        console.error('estimate error', err);
+        alert('Unable to get ambulances at this time.');
+      } finally {
+        seePricesBtn.disabled = false;
+        seePricesBtn.textContent = origText;
+      }
+    }
+
+    // Book selected ambulance type (call api_request_ambulance_type)
+    async function bookSelectedAmbulance(){
+      if(!selectedType){ alert('Please select an ambulance type'); return; }
+      if(!pickupCoord){ alert('Please enter pickup location'); return; }
+      const payload = {
+        ambulance_type: selectedType,
+        pickup: { address: pickupInput.value||'', lat: pickupCoord.lat, lng: pickupCoord.lng },
+        dropoff: dropCoord ? { address: dropInput.value||'', lat: dropCoord.lat, lng: dropCoord.lng } : null
+      };
+      try {
+        const res = await fetch('{% url "api_request_ambulance_type" %}', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type':'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify(payload)
+        });
+        const j = await res.json();
+        if (res.ok && j.ok) {
+          if (j.tracking_url) {
+            window.location.href = j.tracking_url;
+            return;
+          } else {
+            alert('Request sent. Waiting for driver assignment. Request id: ' + (j.ride_id || 'N/A'));
+          }
+        } else {
+          alert('Request failed: ' + (j.error || 'unknown'));
+        }
+      } catch(err){
+        console.error('bookSelectedAmbulance error', err);
+        alert('Request failed');
+      }
+    }
+
+    // Clear/back handlers
+    document.getElementById('back_to_search').addEventListener('click', (ev) => { ev.preventDefault(); showSearchView(); });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      pickupInput.value=''; dropInput.value=''; pickCoords.textContent=''; pickupCoord=null; dropCoord=null;
+      ambulanceOptionsDiv.innerHTML=''; selectedPanel.classList.add('hidden'); selectedType=null;
+      showSearchView();
+      Object.values(nearbyDriverMarkers).forEach(o=>o.marker && o.marker.setMap(null));
+      nearbyDriverMarkers = {};
+      if(directionsRenderer) directionsRenderer.set('directions', null);
+    });
+
+    // use location
+    async function onUseLocationClick(ev){
+      ev && ev.preventDefault && ev.preventDefault();
+      if(!navigator.geolocation){ alert('Geolocation not supported'); return; }
+      useLocationBtn.textContent = 'Locating…';
+      navigator.geolocation.getCurrentPosition(pos => {
+        useLocationBtn.textContent = 'Use my location';
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        pickupCoord = { lat, lng };
+        geocoder.geocode({ location: { lat, lng } }, (results,status) => {
+          if(status === 'OK' && results[0]) pickupInput.value = results[0].formatted_address;
+          pickCoords.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          map.panTo({ lat, lng }); map.setZoom(USER_ZOOM);
+          updateUserLocation(pickupCoord, pos.coords.accuracy);
+          pollNearbyDrivers(true).catch(()=>{}); startPeriodicPolling();
+        });
+        startWatchPosition();
+      }, err => {
+        useLocationBtn.textContent = 'Use my location';
+        alert('Unable to fetch location: ' + (err.message || err.code));
+      }, { enableHighAccuracy:true, timeout:10000 });
+    }
+    useLocationBtn.addEventListener('click', onUseLocationClick);
+
+    // book request
+    document.getElementById('book_now').addEventListener('click', bookSelectedAmbulance);
+    seePricesBtn.addEventListener('click', onSeePrices);
+
+    // watchPosition helpers
+    function startWatchPosition() {
+      if(!navigator.geolocation) return;
+      if(window._mw_watch_id) return;
+      window._mw_watch_id = navigator.geolocation.watchPosition(pos => {
+        const raw = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        pickupCoord = raw;
+        pickCoords.textContent = `${raw.lat.toFixed(6)}, ${raw.lng.toFixed(6)}`;
+        updateUserLocation(raw, pos.coords.accuracy);
+        pollNearbyDrivers(false).catch(()=>{});
+      }, err => { console.warn('watchPosition error', err); }, { enableHighAccuracy:true, maximumAge:2000, timeout:8000 });
+    }
+    function stopWatchPosition(){ if(window._mw_watch_id){ navigator.geolocation.clearWatch(window._mw_watch_id); window._mw_watch_id = null; } }
+
+    // ---------- Custom Autocomplete implementation (enhanced) ----------
+    let acService = null;
+    let placeDetailsCache = new Map(); // place_id -> details object
+    const TOP_N = 6;                     // number of top predictions to fetch details for
+    const AVG_SPEED_KMPH_AUTOCOMP = 25;  // used to compute ETA from distance
+    let sessionTokenByInput = new WeakMap(); // inputEl -> sessionToken
+
+    function ensurePlacesServices() {
+      if(!acService) acService = new google.maps.places.AutocompleteService();
+      if(!placesService) placesService = new google.maps.places.PlacesService(map || document.createElement('div'));
+    }
+
+    // debounce
+    function debounce(fn, wait){
+      let t = null;
+      return function(...args){ clearTimeout(t); t = setTimeout(()=> fn.apply(this,args), wait); };
+    }
+
+    // Haversine (meters)
+    function haversineMeters(lat1, lon1, lat2, lon2){
+      if(lat1==null || lon1==null || lat2==null || lon2==null) return Infinity;
+      const R = 6371000;
+      const toRad = (v) => v * Math.PI / 180;
+      const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+      const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)*Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return Math.round(R * c);
+    }
+    function formatDistanceMeters(m){
+      if(m === Infinity || m == null) return '';
+      if(m < 1000) return `${m} m`;
+      return `${(m/1000).toFixed(1)} km`;
+    }
+    function formatEtaFromMeters(m){
+      if(m === Infinity || m == null) return '';
+      const speed_mps = (AVG_SPEED_KMPH_AUTOCOMP * 1000)/3600;
+      const s = Math.max(5, Math.round(m / speed_mps));
+      if(s >= 60) return `${Math.round(s/60)} min`;
+      return `${s}s`;
+    }
+
+    // Build suggestion DOM (enhanced)
+    function buildSuggestionItem(pred){
+      // pred may contain: place_id, description, structured_formatting, name, address, lat, lng, distance_m
+      const wrapper = document.createElement('div');
+      wrapper.className = 'mw-suggest-item';
+      wrapper.tabIndex = -1;
+      wrapper.dataset.placeId = pred.place_id || '';
+      const title = pred.name || (pred.structured_formatting && pred.structured_formatting.main_text) || pred.description || '';
+      const secondary = pred.address || (pred.structured_formatting && pred.structured_formatting.secondary_text) || '';
+      const distText = (pred.distance_m != null && isFinite(pred.distance_m)) ? formatDistanceMeters(pred.distance_m) : '';
+      const etaText = (pred.distance_m != null && isFinite(pred.distance_m)) ? formatEtaFromMeters(pred.distance_m) : '';
+      const metaHtml = distText ? `<span class="mw-suggest-meta">${escapeHtml(distText)} • ${escapeHtml(etaText)}</span>` : '';
+
+      wrapper.innerHTML = `
+        <div class="mw-suggest-icon">📍</div>
+        <div class="mw-suggest-text">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="mw-suggest-title">${escapeHtml(title)}</div>
+            ${metaHtml}
+          </div>
+          <div class="mw-suggest-sub">${escapeHtml(secondary)}</div>
+        </div>
+      `;
+      return wrapper;
+    }
+
+    // Render suggestions (rewritten to accept enriched predictions)
+    function renderSuggestions(containerEl, enrichedPredictions, onSelect){
+      containerEl.innerHTML = '';
+      if(!enrichedPredictions || !enrichedPredictions.length){
+        containerEl.classList.add('hidden'); return;
+      }
+
+      enrichedPredictions.forEach((p, idx) => {
+        const item = buildSuggestionItem(p);
+        item.addEventListener('click', () => {
+          selectPrediction(p, onSelect, containerEl);
+        });
+        containerEl.appendChild(item);
+      });
+
+      let activeIndex = -1;
+      containerEl.classList.remove('hidden');
+      containerEl.querySelectorAll('.mw-suggest-item').forEach((el, i) => {
+        el.addEventListener('mouseenter', ()=> { setActive(i); });
+      });
+      function setActive(i){
+        const items = containerEl.querySelectorAll('.mw-suggest-item');
+        if(activeIndex >=0 && items[activeIndex]) items[activeIndex].classList.remove('active');
+        activeIndex = i;
+        if(items[activeIndex]) items[activeIndex].classList.add('active');
+      }
+
+      const ownerInput = (containerEl === pickupSugEl) ? pickupInput : dropInput;
+      const keyHandler = (ev) => {
+        const items = containerEl.querySelectorAll('.mw-suggest-item');
+        if(ev.key === 'ArrowDown'){ ev.preventDefault(); if(activeIndex < items.length -1) setActive(activeIndex+1); else setActive(0); if(items[activeIndex]) items[activeIndex].scrollIntoView({block:'nearest'}); }
+        else if(ev.key === 'ArrowUp'){ ev.preventDefault(); if(activeIndex > 0) setActive(activeIndex-1); else setActive(items.length-1); if(items[activeIndex]) items[activeIndex].scrollIntoView({block:'nearest'}); }
+        else if(ev.key === 'Enter'){ ev.preventDefault(); if(activeIndex >=0 && items[activeIndex]) items[activeIndex].click(); }
+        else if(ev.key === 'Escape'){ containerEl.classList.add('hidden'); ownerInput.blur(); }
+      };
+      ownerInput.addEventListener('keydown', keyHandler);
+      containerEl._cleanupKey = () => ownerInput.removeEventListener('keydown', keyHandler);
+    }
+
+    // selectPrediction: uses cached details if present, otherwise requests details (graceful fallback)
+    function selectPrediction(prediction, onSelect, containerEl){
+      containerEl.classList.add('hidden');
+      if(containerEl._cleanupKey) { containerEl._cleanupKey(); containerEl._cleanupKey = null; }
+      const pid = prediction.place_id;
+      // If details cached and have geometry, return quickly
+      if(placeDetailsCache.has(pid) && placeDetailsCache.get(pid).lat != null){
+        const d = placeDetailsCache.get(pid);
+        onSelect({ place_id: pid, address: d.formatted_address || prediction.description || d.name || '', name: d.name || prediction.structured_formatting && prediction.structured_formatting.main_text || '', lat: d.lat, lng: d.lng });
+        return;
+      }
+      // Otherwise, request details and call onSelect
+      ensurePlacesServices();
+      const req = { placeId: pid, fields: ['formatted_address','geometry','name'] };
+      // Use session token if available for the input that owns this container
+      const token = sessionTokenByInput.get(containerEl === pickupSugEl ? pickupInput : dropInput);
+      if(token) req.sessionToken = token;
+      placesService.getDetails(req, (place, status) => {
+        if(status === google.maps.places.PlacesServiceStatus.OK && place && place.geometry){
+          const out = {
+            place_id: pid,
+            address: place.formatted_address || (place.name || prediction.description),
+            name: place.name || '',
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng()
+          };
+          // cache
+          placeDetailsCache.set(pid, { formatted_address: out.address, name: out.name, lat: out.lat, lng: out.lng });
+          onSelect(out);
+        } else {
+          // fallback: return what we have (no lat/lng)
+          onSelect({
+            place_id: pid,
+            address: prediction.description,
+            name: prediction.structured_formatting && prediction.structured_formatting.main_text || '',
+            lat: null, lng: null
+          });
+        }
+      });
+    }
+
+    // queryPredictions: get predictions, fetch top-N details, compute distances, sort, show UI
+    function queryPredictions(text, containerEl, callback){
+      ensurePlacesServices();
+      if(!text || text.trim().length < 1){ containerEl.classList.add('hidden'); return; }
+
+      // show spinner while we fetch
+      containerEl.innerHTML = `<div style="display:flex;gap:10px;align-items:center;padding:8px 12px"><div class="mw-spinner"></div><div class="small">Searching…</div></div>`;
+      containerEl.classList.remove('hidden');
+
+      const sessionToken = new google.maps.places.AutocompleteSessionToken();
+      // associate token with input element owning this container (so selectPrediction can reuse)
+      const ownerInput = (containerEl === pickupSugEl) ? pickupInput : dropInput;
+      sessionTokenByInput.set(ownerInput, sessionToken);
+
+      const opts = {
+        input: text,
+        location: (pickupCoord && new google.maps.LatLng(pickupCoord.lat, pickupCoord.lng)) || map.getCenter(),
+        radius: 50000,
+        sessionToken: sessionToken
+      };
+
+      acService.getPlacePredictions(opts, async (predictions, status) => {
+        if(status !== google.maps.places.PlacesServiceStatus.OK || !predictions || !predictions.length){
+          containerEl.classList.add('hidden');
+          return;
+        }
+
+        // Take top N predictions to fetch details for
+        const top = predictions.slice(0, TOP_N);
+        // prepare details promises (use cache when present)
+        const detailPromises = top.map(p => {
+          const pid = p.place_id;
+          if(placeDetailsCache.has(pid)){
+            return Promise.resolve({ prediction: p, details: placeDetailsCache.get(pid) });
+          }
+          return new Promise((resolve) => {
+            const req = { placeId: pid, fields: ['formatted_address','geometry','name'], sessionToken };
+            placesService.getDetails(req, (place, st) => {
+              if(st === google.maps.places.PlacesServiceStatus.OK && place && place.geometry){
+                const d = { formatted_address: place.formatted_address, name: place.name, lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
+                placeDetailsCache.set(pid, d);
+                resolve({ prediction: p, details: d });
+              } else {
+                // resolve with null details so it goes to fallback
+                resolve({ prediction: p, details: null });
+              }
+            });
+          });
+        });
+
+        // wait for details for the top picks
+        const resolved = await Promise.all(detailPromises);
+
+        // Build enriched predictions that include geometry when available
+        const enriched = [];
+        const fallback = []; // further predictions with no details (append later)
+        const baseRef = (pickupCoord && { lat: pickupCoord.lat, lng: pickupCoord.lng }) || (map && map.getCenter() && { lat: map.getCenter().lat(), lng: map.getCenter().lng() });
+
+        for(const r of resolved){
+          const pred = r.prediction;
+          if(r.details && r.details.lat != null){
+            const dist = haversineMeters(baseRef.lat, baseRef.lng, r.details.lat, r.details.lng);
+            enriched.push({
+              place_id: pred.place_id,
+              structured_formatting: pred.structured_formatting,
+              description: pred.description,
+              name: r.details.name || pred.structured_formatting && pred.structured_formatting.main_text,
+              address: r.details.formatted_address || pred.description,
+              lat: r.details.lat,
+              lng: r.details.lng,
+              distance_m: dist
+            });
+          } else {
+            // no geometry -> keep as fallback candidate (will appear but after sorted enriched)
+            fallback.push({
+              place_id: pred.place_id,
+              structured_formatting: pred.structured_formatting,
+              description: pred.description
+            });
+          }
+        }
+
+        // For remaining predictions (beyond TOP_N) keep them as fallback (no details)
+        if(predictions.length > TOP_N){
+          for(let i = TOP_N; i < predictions.length; i++){
+            const p = predictions[i];
+            fallback.push({ place_id: p.place_id, structured_formatting: p.structured_formatting, description: p.description });
+          }
+        }
+
+        // sort enriched by distance ascending
+        enriched.sort((a,b) => (a.distance_m || Infinity) - (b.distance_m || Infinity) );
+
+        // combine: enriched first, then fallback (as-is)
+        const combined = enriched.concat(fallback);
+
+        // render suggestions
+        renderSuggestions(containerEl, combined, callback);
+      });
+    }
+
+    function attachCustomAutocomplete(inputEl, containerEl, onPlaceSelected){
+      const doQuery = debounce((val) => {
+        queryPredictions(val, containerEl, onPlaceSelected);
+      }, 220);
+
+      inputEl.addEventListener('input', (ev)=> {
+        const v = ev.target.value;
+        doQuery(v);
+      });
+
+      document.addEventListener('click', (ev) => {
+        if(!containerEl.contains(ev.target) && ev.target !== inputEl) {
+          containerEl.classList.add('hidden');
+        }
+      });
+
+      inputEl.addEventListener('focus', (ev) => {
+        const v = ev.target.value;
+        if(v && v.trim().length) doQuery(v);
+      });
+
+      inputEl.addEventListener('keydown', (ev) => {
+        if(ev.key === 'Enter'){
+          // allows selection by Enter if suggestion active
+        } else if(ev.key === 'Escape'){
+          containerEl.classList.add('hidden');
+        }
+      });
+    }
+
+    // ---------- Initialize ----------
+    window.initMap = initMap;
+    initMap();
+
+    // cleanup
+    window.addEventListener('beforeunload', () => { stopWatchPosition(); stopPeriodicPolling(); });
+
+  </script>
+</body>
+</html>

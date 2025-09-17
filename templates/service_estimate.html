@@ -1,0 +1,303 @@
+{# templates/service_estimate.html #}
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Estimate — MedWheels</title>
+  <link rel="stylesheet" href="{% static 'css/admin-common.css' %}" />
+  <style>
+    /* minimal inline CSS for layout - keep your main site's styles */
+    body{font-family:Arial,Helvetica,sans-serif;margin:0}
+    .wrap{display:flex;gap:18px;padding:16px;height:calc(100vh - 60px)}
+    .left-panel{width:420px;background:#fff;border-radius:10px;padding:16px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+    .right-panel{flex:1;border-radius:10px;overflow:hidden;position:relative}
+    #map{width:100%;height:100%}
+    .candidate{display:flex;gap:12px;align-items:center;padding:12px;border-radius:10px;border:1px solid #eee;margin-bottom:10px;cursor:pointer}
+    .candidate.selected{border-color:#2f80ed;background:#f1f7ff}
+    .candidate img.avatar{width:64px;height:48px;border-radius:6px;object-fit:cover}
+    .candidate .meta{flex:1}
+    .candidate .fare{font-weight:700;font-size:18px}
+    .book-btn{display:block;margin-top:8px;padding:10px;border-radius:8px;border:0;background:#2f80ed;color:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div style="padding:12px 16px;background:#fff;border-bottom:1px solid #eee">
+    <strong>Estimate</strong> — Review & Book
+  </div>
+  <div class="wrap">
+    <div class="left-panel">
+      <div>
+        <h3>Your trip</h3>
+        <div><strong>Pickup:</strong> <span id="pickupAddress"></span></div>
+        <div><strong>Dropoff:</strong> <span id="dropAddress"></span></div>
+      </div>
+
+      <hr style="margin:12px 0">
+
+      <h4>Available ambulances</h4>
+      <div id="candidatesList">
+        <div class="small">Loading candidates…</div>
+      </div>
+
+      <div id="selectedBox" style="display:none;margin-top:12px">
+        <h4>Selected</h4>
+        <div id="selectedInfo"></div>
+        <button id="bookRideBtn" class="book-btn">Book this ambulance</button>
+      </div>
+
+    </div>
+
+    <div class="right-panel">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- load Google Maps JS -->
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=places"></script>
+
+  <script>
+  // --- config & small helpers ---
+  const csrftoken = (function(){
+    const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    return v ? decodeURIComponent(v.pop()) : '';
+  })();
+
+  const ride = {{ ride|safe }}; // ride was stored in session by api_see_price
+  if (!ride) {
+    alert('No ride data — please search from service page');
+    window.location.href = '{% url "service" %}';
+  }
+
+  const pickup = ride.pickup;
+  const dropoff = ride.dropoff;
+
+  document.getElementById('pickupAddress').textContent = pickup.address || '';
+  document.getElementById('dropAddress').textContent = (dropoff && dropoff.address) ? dropoff.address : '—';
+
+  // Map, markers, directions
+  let map, directionsService, directionsRenderer;
+  let userPickupMarker = null;
+  let driverMarkers = {}; // map driver_id -> marker
+  let selectedDriverId = null;
+  let ws = null; // websocket for selected driver
+
+  function initMap(){
+    const center = {lat: {{DEFAULT_MAP_CENTER.0|default:22.5726 }}, lng: {{DEFAULT_MAP_CENTER.1|default:88.3639 }} };
+    map = new google.maps.Map(document.getElementById('map'), { center, zoom:13, streetViewControl:false });
+
+    directionsService = new google.maps.DirectionsService();
+    directionsRenderer = new google.maps.DirectionsRenderer({suppressMarkers:true, preserveViewport:true, map});
+
+    // add pickup marker
+    if (pickup && pickup.lat && pickup.lng) {
+      userPickupMarker = new google.maps.Marker({
+        position: {lat: parseFloat(pickup.lat), lng: parseFloat(pickup.lng)},
+        map,
+        title: 'Pickup',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#2f80ed',
+          fillOpacity: 1,
+          strokeWeight: 0
+        }
+      });
+      map.panTo(userPickupMarker.getPosition());
+    }
+
+    if (dropoff && dropoff.lat && dropoff.lng) {
+      // draw route pickup->dropoff now (route is always from user pickup to drop)
+      drawRoutePickupToDrop(pickup, dropoff);
+    }
+  }
+
+  function drawRoutePickupToDrop(pickup, drop) {
+    if (!directionsService) return;
+    const rreq = {
+      origin: {lat: parseFloat(pickup.lat), lng: parseFloat(pickup.lng)},
+      destination: {lat: parseFloat(drop.lat), lng: parseFloat(drop.lng)},
+      travelMode: 'DRIVING'
+    };
+    directionsService.route(rreq, (res, status) => {
+      if (status === 'OK' && res) {
+        directionsRenderer.setDirections(res);
+        // optionally place start/end markers
+        const leg = res.routes[0].legs[0];
+        // custom start/end markers
+        new google.maps.Marker({position: leg.start_location, map, title: 'Pickup', icon: {path: google.maps.SymbolPath.CIRCLE, scale:8, fillColor:'#2f80ed', fillOpacity:1, strokeWeight:0}});
+        new google.maps.Marker({position: leg.end_location, map, title: 'Dropoff'});
+      } else {
+        console.warn('Directions failed', status);
+      }
+    });
+  }
+
+  // fetch candidates
+  async function loadCandidates(){
+    const payload = {pickup, dropoff};
+    try {
+      const res = await fetch('{% url "api_estimate" %}', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type':'application/json','X-CSRFToken':csrftoken},
+        body: JSON.stringify(payload)
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        throw new Error(j.error || 'estimate failed');
+      }
+      renderCandidates(j.candidates || []);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('candidatesList').innerHTML = '<div class="small">Failed to load candidates</div>';
+    }
+  }
+
+  function renderCandidates(list){
+    const el = document.getElementById('candidatesList');
+    el.innerHTML = '';
+    if (!list.length) {
+      el.innerHTML = '<div class="small">No ambulances nearby</div>';
+      return;
+    }
+    list.forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'candidate';
+      div.dataset.driverId = c.driver_id;
+      div.innerHTML = `
+        <img class="avatar" src="${c.photo_url || '{% static "img/ambulance-thumb.png" %}'}" alt="">
+        <div class="meta">
+          <div style="font-weight:700">${escapeHtml(c.full_name)} — ${escapeHtml(c.vehicle || 'Ambulance')}</div>
+          <div style="font-size:13px;color:#666">${c.eta_min} min • ${(c.distance_m/1000).toFixed(2)} km</div>
+        </div>
+        <div style="text-align:right">
+          <div class="fare">₹ ${Number(c.fare).toFixed(2)}</div>
+          <div style="font-size:12px;color:#666;margin-top:6px">Arrives in ${c.eta_min} min</div>
+        </div>
+      `;
+      div.addEventListener('click', ()=> selectCandidate(c));
+      el.appendChild(div);
+
+      // add map marker for each driver (icon as small ambulance)
+      const pos = {lat: parseFloat(c.lat), lng: parseFloat(c.lng)};
+      const iconSvg = {
+        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(
+          `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='24' viewBox='0 0 48 24'>
+            <rect rx='3' width='48' height='18' y='3' fill='#2f80ed'/>
+            <circle cx='12' cy='19' r='3' fill='#222'/>
+            <circle cx='36' cy='19' r='3' fill='#222'/>
+           </svg>`
+        ),
+        scaledSize: new google.maps.Size(48,24),
+      };
+      const m = new google.maps.Marker({
+        position: pos,
+        map,
+        title: c.full_name,
+        icon: iconSvg,
+      });
+      driverMarkers[c.driver_id] = { marker: m, data: c };
+    });
+  }
+
+  function selectCandidate(c){
+    // unselect previous UI
+    document.querySelectorAll('.candidate').forEach(x => x.classList.remove('selected'));
+    const card = document.querySelector(`.candidate[data-driver-id="${c.driver_id}"]`);
+    if (card) card.classList.add('selected');
+    selectedDriverId = c.driver_id;
+
+    // show selected info
+    const info = document.getElementById('selectedInfo');
+    info.innerHTML = `
+      <div><strong>${escapeHtml(c.full_name)}</strong></div>
+      <div>${escapeHtml(c.vehicle)} • ${c.eta_min} min • ${(c.distance_m/1000).toFixed(2)} km</div>
+      <div style="margin-top:6px">Fare: <strong>₹ ${Number(c.fare).toFixed(2)}</strong></div>
+    `;
+    document.getElementById('selectedBox').style.display = 'block';
+
+    // if a websocket already open, close it (we'll subscribe to selected driver)
+    if (ws) { try { ws.close(); } catch(e){} ws = null; }
+
+    // open websocket for the selected driver to receive live updates
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${proto}://${window.location.host.replace(/:.*/,'')}:${window.location.port || window.location.host.split(':').pop()}/ws/driver_live/${selectedDriverId}/`;
+    // NOTE: if you host on same origin with proper ASGI, you can use:
+    const socketUrl = `${proto}://${window.location.host}/ws/driver_live/${selectedDriverId}/`;
+    ws = new WebSocket(socketUrl);
+
+    const drv = driverMarkers[selectedDriverId];
+    let animMarker = drv && drv.marker;
+
+    ws.onopen = function() {
+      console.log('ws open', socketUrl);
+    };
+    ws.onmessage = function(e) {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'location.update') {
+          // animate the marker to new lat/lng
+          const newPos = {lat: parseFloat(msg.lat), lng: parseFloat(msg.lng)};
+          animateMarkerTo(animMarker, newPos);
+        } else if (msg.type === 'ride.request') {
+          // driver received ride request (not relevant for user)
+        }
+      } catch (err) { console.error(err); }
+    };
+    ws.onclose = function(){ console.log('ws closed'); };
+  }
+
+  // simple linear animation between marker positions
+  function animateMarkerTo(marker, newPos) {
+    if (!marker) return;
+    const start = marker.getPosition();
+    const startLat = start.lat(), startLng = start.lng();
+    const endLat = newPos.lat, endLng = newPos.lng;
+    const frames = 12;
+    let i = 0;
+    const step = function(){
+      i++;
+      const t = i/frames;
+      const lat = startLat + (endLat - startLat) * t;
+      const lng = startLng + (endLng - startLng) * t;
+      marker.setPosition({lat, lng});
+      if (i < frames) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // booking
+  document.getElementById('bookRideBtn').addEventListener('click', async ()=>{
+    if (!selectedDriverId) { alert('Select an ambulance first'); return; }
+    try {
+      const payload = { driver_id: selectedDriverId, pickup, dropoff };
+      const res = await fetch('{% url "api_book_ride" %}', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type':'application/json','X-CSRFToken':csrftoken},
+        body: JSON.stringify(payload)
+      });
+      const j = await res.json();
+      if (res.ok && j.ok) {
+        alert('Ride requested (id ' + j.ride_id + '). Driver will be notified.');
+        // optionally redirect to ride-tracking page
+        window.location.href = '{% url "ride_tracking" %}' + '?ride_id=' + j.ride_id;
+      } else {
+        alert('Booking failed: ' + (j.error || 'unknown'));
+      }
+    } catch (err) {
+      console.error(err); alert('Booking failed');
+    }
+  });
+
+  function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, function(m){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); }); }
+
+  // init
+  initMap();
+  loadCandidates();
+
+  </script>
+</body>
+</html>

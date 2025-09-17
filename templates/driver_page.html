@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join as Driver | MedWheels</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #dc3545;
+      --accent: #76df8e;
+      --ink: #222;
+      --muted: #6c757d;
+      --bg: #ffffff;
+      --chip: #f6f8ff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+    }
+
+    .login-btn {
+      background: var(--chip);
+      color: var(--brand);
+      padding: 10px 20px;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+      transition: background 0.3s ease;
+    }
+
+    .login-btn:hover {
+      background: #e9d2d2;
+    }
+
+    /* Hero Section */
+    header {
+      background: var(--brand);
+      color: #fff;
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+    }
+
+    header p {
+      margin-top: 8px;
+      font-size: 1rem;
+    }
+
+    /* Intro Section */
+    .intro {
+      max-width: 900px;
+      margin: 40px auto;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .intro h2 {
+      color: var(--brand);
+      margin-bottom: 15px;
+      font-size: 1.8rem;
+    }
+
+    /* Steps Section */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    .step {
+      background: var(--chip);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    .step:hover {
+      transform: translateY(-5px);
+    }
+
+    .step img {
+      max-width: 80px;
+      margin-bottom: 15px;
+    }
+
+    .step h3 {
+      color: var(--brand);
+      margin-bottom: 10px;
+    }
+
+    /* Benefits Section */
+    .benefits {
+      max-width: 1100px;
+      margin: 60px auto;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .benefits h2 {
+      color: var(--brand);
+      margin-bottom: 30px;
+      font-size: 1.8rem;
+    }
+
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .benefit {
+      background: var(--chip);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    .benefit:hover {
+      transform: translateY(-5px);
+    }
+
+    .benefit img {
+      max-width: 60px;
+      margin-bottom: 10px;
+    }
+
+    .benefit h3 {
+      color: var(--brand);
+      margin-bottom: 8px;
+    }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      margin: 40px 0;
+    }
+
+    .cta a {
+      display: inline-block;
+      background: var(--brand);
+      color: #fff;
+      text-decoration: none;
+      padding: 12px 30px;
+      border-radius: 25px;
+      font-weight: bold;
+      transition: background 0.3s ease;
+    }
+
+    .cta a:hover {
+      background: #b02a37;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--chip);
+      color: var(--muted);
+      text-align: center;
+      padding: 15px;
+      font-size: 14px;
+      margin-top: 40px;
+    }
+
+    /* Responsive */
+    @media(max-width: 768px) {
+      nav ul {
+        display: none;
+      }
+
+      nav .menu-icon {
+        display: block;
+        font-size: 1.5rem;
+        cursor: pointer;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+      }
+
+      .intro h2,
+      .benefits h2 {
+        font-size: 1.6rem;
+      }
+    }
+
+     /* footer */
+    .footer {
+      padding-top: 1.5rem;
+      padding-bottom: 1.5rem;
+      padding: 1rem;
+      border-top: 1px solid #dee2e6;
+    }
+
+    .foot-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <!-- <nav>
+    <div class="logo">MedWheels</div>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="services.html">Services</a></li>
+      <li><a href="join-driver.html" style="color: var(--brand);">Join as Driver</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+    <button class="login-btn" onclick="window.location.href='login.html'">Login</button>
+  </nav> -->
+
+  <!-- Header -->
+  <header>
+    <h1>Join as a Driver with MedWheels</h1>
+    <p>Your journey to saving lives while earning begins here</p>
+     <button class="login-btn" onclick="window.location.href='driver_login'">Login</button>
+  </header>
+
+  <!-- Intro -->
+  <section class="intro">
+    <h2>Why Drive with MedWheels?</h2>
+    <p>At MedWheels, we connect drivers with people who need emergency medical transport. 
+      As a driver, you’ll play a critical role in saving lives while also building a rewarding career. 
+      We ensure fair pay, transparent policies, and a strong community that supports you throughout your journey.</p>
+  </section>
+
+  <!-- Steps -->
+  <section class="steps">
+    <div class="step">
+      <img src="https://cdn-icons-png.flaticon.com/512/3135/3135768.png" alt="Register Icon">
+      <h3>Step 1: Apply Online</h3>
+      <p>Fill out a simple online application form with your details and documents.</p>
+    </div>
+    <div class="step">
+      <img src="https://cdn-icons-png.flaticon.com/512/1828/1828469.png" alt="Verify Icon">
+      <h3>Step 2: Verification</h3>
+      <p>Our team verifies your identity, license, and documents to ensure trust & safety.</p>
+    </div>
+    <div class="step">
+      <img src="https://cdn-icons-png.flaticon.com/512/1946/1946488.png" alt="Start Driving Icon">
+      <h3>Step 3: Start Driving</h3>
+      <p>Once approved, you’ll start receiving ride requests and begin your journey with us.</p>
+    </div>
+    <div class="step">
+      <img src="https://cdn-icons-png.flaticon.com/512/2910/2910768.png" alt="Earn Money Icon">
+      <h3>Step 4: Earn & Get Paid</h3>
+      <p>Receive payments directly in your bank account with timely payouts.</p>
+    </div>
+  </section>
+
+  <!-- Benefits -->
+  <section class="benefits">
+    <h2>Benefits of Driving with MedWheels</h2>
+    <div class="benefits-grid">
+      <div class="benefit">
+        <img src="https://cdn-icons-png.flaticon.com/512/1903/1903162.png" alt="Fair Pay">
+        <h3>Fair Earnings</h3>
+        <p>Earn competitive rates with transparent payout systems.</p>
+      </div>
+      <div class="benefit">
+        <img src="https://cdn-icons-png.flaticon.com/512/1483/1483336.png" alt="Flexibility">
+        <h3>Flexible Hours</h3>
+        <p>Choose your working hours to balance work and life easily.</p>
+      </div>
+      <div class="benefit">
+        <img src="https://cdn-icons-png.flaticon.com/512/1828/1828427.png" alt="Support">
+        <h3>24/7 Support</h3>
+        <p>Get assistance anytime with our dedicated driver support team.</p>
+      </div>
+      <div class="benefit">
+        <img src="https://cdn-icons-png.flaticon.com/512/1105/1105142.png" alt="Rewards">
+        <h3>Performance Rewards</h3>
+        <p>Earn bonuses for consistent performance and high ratings.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Call to Action -->
+  <div class="cta">
+    <a href="driver_apply" target="_blank">Apply Now</a>
+  </div>
+
+   <!-- footer -->
+  <footer class="footer">
+    <div class="foot-container">
+      <small>© <span id="yr"></span> MedWheels — All rights reserved.</small>
+      <small><a href="#" style="color:var(--brand)">Privacy</a> · <a href="#"
+          style="color:var(--brand)">Terms</a></small>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('yr').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
