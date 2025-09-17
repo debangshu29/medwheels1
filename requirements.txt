@@ -30,4 +30,5 @@ zope.interface==8.0
 python-dotenv==1.0.0
 dj-database-url==1.0.0
 django-allauth==0.63.6
-
+requests==2.31.0
+Pillow==10.1.1
