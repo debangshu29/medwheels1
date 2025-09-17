@@ -107,22 +107,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'medwheels.wsgi.application'
 ASGI_APPLICATION = 'medwheels.asgi.application'
 
-REDIS_URL = os.environ.get("REDIS_URL")
+REDIS_URL = os.environ.get("REDIS_URL", None)
+
 if REDIS_URL:
-    # channels_redis accepts a single URL inside hosts tuple
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [REDIS_URL]},
-        }
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
+        },
     }
 else:
-    # local fallback (your original)
+    # fallback to in-memory for development (not suitable for multi-worker production)
+    from channels.layers import InMemoryChannelLayer
     CHANNEL_LAYERS = {
         "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
-        }
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
     }
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
