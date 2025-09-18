@@ -531,7 +531,8 @@
       // send the last known position to mark online (if available)
       if (lastLat !== null && lastLng !== null) sendLocation(lastLat, lastLng, true);
     });
-
+    window.DRIVER_ID = {{ driver.id|default:'null' }};
+    console.log('TEMPLATE: window.DRIVER_ID =', window.DRIVER_ID);
     btnStop.addEventListener('click', function (e) {
       e.preventDefault();
       if (watchId !== null) {
@@ -544,26 +545,54 @@
       // send last known coords with is_online=false so backend can mark driver offline (API requires coords)
       sendLocation(null, null, false);
     });
-      // ensure driver.id is available in template
-  const DRIVER_ID = {{ driver.id|default:'null' }};
-  if (DRIVER_ID) {
-    (function connectDriverSocket() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const url = `${proto}://${location.host}/ws/driver/${DRIVER_ID}/`;
-      console.log('connect ws to', url);
-      let ws = new WebSocket(url);
-      ws.onopen = () => console.log('ws connected');
-      ws.onmessage = (e) => {
-        try { console.log('ws message', JSON.parse(e.data)); } catch(_) { console.log('ws message raw', e.data); }
+      (function(){
+  try {
+    const DRIVER_ID = window.DRIVER_ID || null;
+    console.log('Driver WS bootstrap, DRIVER_ID =', DRIVER_ID);
+    if (!DRIVER_ID) {
+      console.warn('Driver ID missing - websocket will not start');
+      return;
+    }
+
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = `${proto}://${window.location.host}/ws/driver/${DRIVER_ID}/`;
+    console.log('Attempting WebSocket to', url);
+
+    function connectOnce() {
+      let ws;
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        console.error('WebSocket constructor failed', e);
+        setTimeout(connectOnce, 3000);
+        return;
+      }
+
+      ws.onopen = function() {
+        console.log('WS OPEN');
       };
-      ws.onclose = (e) => { console.log('ws closed', e); setTimeout(connectDriverSocket, 5000); };
-      ws.onerror = (err) => console.error('ws error', err);
-      // store globally if you need it elsewhere
-      window._driver_socket = ws;
-    })();
-  } else {
-    console.warn('No DRIVER_ID; websocket not started');
+      ws.onmessage = function(ev) {
+        console.log('WS MESSAGE', ev.data);
+        try { console.log('WS MSG parsed', JSON.parse(ev.data)); } catch(e){/*ignore*/ }
+      };
+      ws.onerror = function(err) {
+        console.error('WS ERROR', err);
+      };
+      ws.onclose = function(evt) {
+        console.warn('WS CLOSED', evt);
+        // reconnect after short delay
+        setTimeout(connectOnce, 3000);
+      };
+
+      // expose for debugging in console
+      window._driver_ws = ws;
+    }
+
+    connectOnce();
+  } catch (err) {
+    console.error('Driver WS bootstrap error', err);
   }
+})();
 
     // initialize UI from server-provided live object (if any)
     (function initFromServer() {
