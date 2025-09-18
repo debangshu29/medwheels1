@@ -376,7 +376,14 @@
 
     <!-- Pass initial live state from server to JS -->
     {% if live %}
-      <script>window.INIT_DRIVER_LIVE = {{ live|safe }};</script>
+      {{ live|json_script:"init_driver_live" }}
+      <script>
+        try {
+          window.INIT_DRIVER_LIVE = JSON.parse(document.getElementById('init_driver_live').textContent);
+        } catch (e) {
+          window.INIT_DRIVER_LIVE = null;
+        }
+      </script>
     {% else %}
       <script>window.INIT_DRIVER_LIVE = null;</script>
     {% endif %}
