@@ -544,6 +544,26 @@
       // send last known coords with is_online=false so backend can mark driver offline (API requires coords)
       sendLocation(null, null, false);
     });
+      // ensure driver.id is available in template
+  const DRIVER_ID = {{ driver.id|default:'null' }};
+  if (DRIVER_ID) {
+    (function connectDriverSocket() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = `${proto}://${location.host}/ws/driver/${DRIVER_ID}/`;
+      console.log('connect ws to', url);
+      let ws = new WebSocket(url);
+      ws.onopen = () => console.log('ws connected');
+      ws.onmessage = (e) => {
+        try { console.log('ws message', JSON.parse(e.data)); } catch(_) { console.log('ws message raw', e.data); }
+      };
+      ws.onclose = (e) => { console.log('ws closed', e); setTimeout(connectDriverSocket, 5000); };
+      ws.onerror = (err) => console.error('ws error', err);
+      // store globally if you need it elsewhere
+      window._driver_socket = ws;
+    })();
+  } else {
+    console.warn('No DRIVER_ID; websocket not started');
+  }
 
     // initialize UI from server-provided live object (if any)
     (function initFromServer() {
