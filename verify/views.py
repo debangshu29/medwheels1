@@ -627,14 +627,14 @@ def driver_login(request):
     Login endpoint for drivers only.
     - Accepts POST: mobile + password
     - Ensures Users.user_type == 'driver' and Drivers exists and status == 'approved'
-    - Sets session keys: user_id, user_name and redirects to driver dashboard
+    - Logs in both custom Users session and Django auth user for Channels
     """
     if request.method == 'GET':
         return render(request, 'driver_login.html', {})
 
-    # POST
+    # --- POST ---
     mobile = (request.POST.get('mobile') or '').strip()
-    password = request.POST.get('password') or ''
+    password = (request.POST.get('password') or '').strip()
 
     if not mobile or not password:
         return render(request, 'driver_login.html', {'error': 'Enter mobile and password.'})
@@ -644,45 +644,30 @@ def driver_login(request):
     except Users.DoesNotExist:
         return render(request, 'driver_login.html', {'error': 'User not found.'})
 
-    # must be driver type
     if (getattr(custom_user, 'user_type', '') or '').lower() != 'driver':
         return render(request, 'driver_login.html', {'error': 'This login is for drivers only.'})
 
-    # driver profile must exist
     driver_profile = Drivers.objects.filter(user=custom_user).first()
     if not driver_profile:
         return render(request, 'driver_login.html', {'error': 'Driver profile not found. Contact support.'})
 
-    # driver must be approved
     if driver_profile.status != 'approved':
         return render(request, 'driver_login.html',
                       {'error': f'Your application is not approved (status: {driver_profile.status}).'})
 
-    # password stored in custom Users.password (hashed with make_password). It could be NULL if driver hasn't set password yet
     stored_hash = custom_user.password or ''
     if not stored_hash:
-        # user has no password set: ask them to set password (you already send set-password link on approve)
         return render(request, 'driver_login.html', {
-            'error': 'No password set. Check your email for the set-password link or request password reset.'
+            'error': 'No password set. Check your email for the set-password link.'
         })
 
     if not check_password(password, stored_hash):
         return render(request, 'driver_login.html', {'error': 'Invalid credentials.'})
 
-    # login success: set session and optionally ensure a Django auth user exists and is logged in
-    request.session['user_id'] = custom_user.id
-    request.session['user_name'] = custom_user.name or custom_user.phone_number
-    request.session['is_driver'] = True
-
-    # Also create/ensure corresponding Django auth user so standard auth-based decorators work (optional):
-    # create a UserModel if not exists (we prefer not to reset password here)
-    try:
-        django_user = UserModel.objects.filter(email__iexact=(custom_user.email or '')).first()
-    except Exception:
-        django_user = None
-
+    # --- Ensure Django auth user exists ---
+    django_user = UserModel.objects.filter(email__iexact=(custom_user.email or '')).first()
     if not django_user:
-        # create an auth user with unusable password so signals/allauth still work later
+        # create a new Django user with unusable password
         username_base = custom_user.phone_number or (custom_user.email or 'driver').split('@')[0]
         username = username_base
         suffix = 0
@@ -693,15 +678,21 @@ def driver_login(request):
         django_user.set_unusable_password()
         django_user.save()
 
-    # Do Django login if you want (optional) - requires authenticate if password set in auth_user
-    # auth = authenticate(request, username=django_user.username, password=password)
-    # if auth:
-    #     django_login(request, auth)
+    # --- Authenticate Django user so we can login (required for Channels WebSocket) ---
+    auth_user = authenticate(request, username=django_user.username, password=password)
+    if auth_user:
+        auth_login(request, auth_user)
+    else:
+        # fallback: set session manually, Channels may still work if session cookie present
+        request.session['_auth_user_id'] = django_user.pk
+        request.session['_auth_user_backend'] = 'django.contrib.auth.backends.ModelBackend'
+        request.session['_auth_user_hash'] = django_user.get_session_auth_hash()
 
-    # redirect to driver dashboard (change name to your url name)
+    # --- Set custom session keys for your app logic ---
+    request.session['user_id'] = custom_user.id
+    request.session['user_name'] = custom_user.name or custom_user.phone_number
+    request.session['is_driver'] = True
+
+    # --- Redirect to dashboard ---
     next_url = request.GET.get('next') or reverse('driver_dashboard')
     return redirect(next_url)
-
-
-
-
