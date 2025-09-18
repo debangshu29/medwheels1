@@ -21,6 +21,9 @@ class DriverLiveConsumer(AsyncWebsocketConsumer):
             logger.warning("DriverLiveConsumer.connect: invalid driver_id: %s; scope=%s", e, self.scope.get('url_route'))
             await self.close(code=4002)
             return
+        logger.info("WS handshake scope headers: %s", self.scope.get('headers'))
+        logger.info("WS handshake cookies: %s", getattr(self.scope, 'cookies', None))
+
 
         user = self.scope.get('user')
         logger.info("DriverLiveConsumer.connect attempt driver_id=%s user_id=%s client=%s",
@@ -106,6 +109,8 @@ class DriverConsumer(AsyncWebsocketConsumer):
             logger.warning("DriverConsumer.connect: invalid driver_id: %s; scope=%s", e, self.scope.get('url_route'))
             await self.close(code=4002)
             return
+        logger.info("WS handshake scope headers: %s", self.scope.get('headers'))
+        logger.info("WS handshake cookies: %s", getattr(self.scope, 'cookies', None))
 
         user = self.scope.get('user')
         logger.info("DriverConsumer.connect attempt driver_id=%s user_id=%s client=%s",
@@ -177,7 +182,9 @@ class RideConsumer(AsyncWebsocketConsumer):
             logger.warning("RideConsumer.connect: invalid ride_id: %s; scope=%s", e, self.scope.get('url_route'))
             await self.close(code=4002)
             return
-
+        logger.info("WS handshake scope headers: %s", self.scope.get('headers'))
+        logger.info("WS handshake cookies: %s", getattr(self.scope, 'cookies', None))
+        
         user = self.scope.get('user')
         logger.info("RideConsumer.connect attempt ride_id=%s user_id=%s client=%s",
                     self.ride_id, getattr(user, 'id', None), self.scope.get('client'))
