@@ -15,6 +15,6 @@ urlpatterns = [
     path('find_driver/<int:ride_id>/', views.find_driver_view, name='find_driver'),
     path('api/driver/respond/', views.api_driver_respond, name='api_driver_respond'),
     path('api_cancel_ride/<int:ride_id>/', views.api_cancel_ride, name='api_cancel_ride'),
-
+    path('debug/channel_layer/', views.debug_channel_layer, name='debug_channel_layer'),
 
 ]
