@@ -28,6 +28,13 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 
 
 DEFAULT_MAP_CENTER = (22.5726, 88.3639)  # fallback (Kolkata) - change to your city
+def debug_channel_layer(request):
+    try:
+        from channels.layers import get_channel_layer
+        cl = get_channel_layer()
+        return JsonResponse({'ok': True, 'layer': str(type(cl)), 'repr': repr(cl)})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)})
 
 # helpers
 def haversine_m(lat1, lon1, lat2, lon2):
