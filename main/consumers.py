@@ -60,11 +60,14 @@ class DriverLiveConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
+    # only try to discard if we successfully set self.group_name in connect()
+    group = getattr(self, "group_name", None)
+    if group:
         try:
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            await self.channel_layer.group_discard(group, self.channel_name)
         except Exception as e:
-            logger.exception("DriverLiveConsumer.disconnect: error discarding group %s: %s", getattr(self, 'group_name', None), e)
-
+            logger.exception("DriverConsumer.disconnect: error discarding group %s: %s", group, e)
+            
     async def location_update(self, event):
         await self.send_json({
             'type': 'location.update',
@@ -142,11 +145,14 @@ class DriverConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
+    # only try to discard if we successfully set self.group_name in connect()
+    group = getattr(self, "group_name", None)
+    if group:
         try:
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            await self.channel_layer.group_discard(group, self.channel_name)
         except Exception as e:
-            logger.exception("DriverConsumer.disconnect: error discarding group %s: %s", getattr(self, 'group_name', None), e)
-
+            logger.exception("DriverConsumer.disconnect: error discarding group %s: %s", group, e)
+            
     async def ride_request(self, event):
         await self.send_json({'type': 'ride.request', 'data': event})
 
@@ -210,11 +216,14 @@ class RideConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
+    # only try to discard if we successfully set self.group_name in connect()
+    group = getattr(self, "group_name", None)
+    if group:
         try:
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            await self.channel_layer.group_discard(group, self.channel_name)
         except Exception as e:
-            logger.exception("RideConsumer.disconnect: error discarding group %s: %s", getattr(self, 'group_name', None), e)
-
+            logger.exception("DriverConsumer.disconnect: error discarding group %s: %s", group, e)
+            
     async def ride_assigned(self, event):
         await self.send_json({
             'type': 'ride.assigned',
