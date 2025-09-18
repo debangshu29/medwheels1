@@ -45,11 +45,7 @@ class DriverLiveConsumer(AsyncWebsocketConsumer):
             await self.close(code=4002)
             return
 
-        if driver.user_id != user.id:
-            logger.info("DriverLiveConsumer.connect: driver.user_id (%s) != user.id (%s) -> close(4003)",
-                        driver.user_id, user.id)
-            await self.close(code=4003)
-            return
+        
 
         self.group_name = f"driver_{self.driver_id}"
         try:
@@ -132,11 +128,7 @@ class DriverConsumer(AsyncWebsocketConsumer):
             await self.close(code=4002)
             return
 
-        if driver.user_id != user.id:
-            logger.info("DriverConsumer.connect: driver.user_id (%s) != user.id (%s) -> close(4003)",
-                        driver.user_id, user.id)
-            await self.close(code=4003)
-            return
+        
 
         self.group_name = f"driver_{self.driver_id}"
         try:
