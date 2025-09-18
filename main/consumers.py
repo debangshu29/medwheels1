@@ -20,8 +20,8 @@ class DriverLiveConsumer(AsyncWebsocketConsumer):
             return
         # Verify driver belongs to this user
         try:
-            driver = await database_sync_to_async(Driver.objects.get)(pk=self.driver_id)
-        except Driver.DoesNotExist:
+            driver = await database_sync_to_async(Drivers.objects.get)(pk=self.driver_id)
+        except Drivers.DoesNotExist:
             await self.close(code=4002)
             return
         if driver.user_id != user.id:
@@ -72,8 +72,8 @@ class DriverConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001)
             return
         try:
-            driver = await database_sync_to_async(Driver.objects.get)(pk=self.driver_id)
-        except Driver.DoesNotExist:
+            driver = await database_sync_to_async(Drivers.objects.get)(pk=self.driver_id)
+        except Drivers.DoesNotExist:
             await self.close(code=4002)
             return
         if driver.user_id != user.id:
