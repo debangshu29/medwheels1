@@ -12,7 +12,7 @@ urlpatterns = [
     path("driver/driver_apply/", views.driver_application, name="driver_application"),
     path('driver/set-password/<uidb64>/<token>/', views.driver_set_password, name='driver_set_password'),
     path('driver/driver_login/', views.driver_login, name='driver_login'),
-    path('driver/', views.driver_page, name='driver_page')
+    path('driver/', views.driver_page, name='driver_page'),
     path('driver/logout/', verify_views.driver_logout, name='driver_logout'),
 
 ]
