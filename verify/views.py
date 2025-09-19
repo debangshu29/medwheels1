@@ -4,7 +4,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.urls import reverse
 from django.contrib.auth import get_user_model, authenticate, login as auth_login
 from django.db import transaction
-
+from django.contrib.auth import logout as auth_logout
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.http import require_GET, require_POST
@@ -709,3 +709,31 @@ def driver_login(request):
     </html>
     """
     return HttpResponse(html)
+
+
+def driver_logout(request):
+    """
+    Logout driver and mark their live row offline (best-effort).
+    """
+    user_id = request.session.get('user_id')
+    if user_id:
+        try:
+            custom_user = Users.objects.get(pk=user_id)
+            # find driver profile
+            driver = Drivers.objects.filter(user=custom_user).first()
+            if driver:
+                try:
+                    # mark DriverLive is_online False
+                    dl = DriverLive.objects.filter(driver=driver).first()
+                    if dl:
+                        dl.is_online = False
+                        dl.save(update_fields=['is_online'])
+                except Exception:
+                    pass
+        except Users.DoesNotExist:
+            pass
+
+    # Log out Django auth and clear session
+    auth_logout(request)
+    request.session.flush()
+    return redirect(reverse('driver_login'))
