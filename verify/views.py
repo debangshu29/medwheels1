@@ -637,7 +637,11 @@ def driver_login(request):
         if request.session.get('user_id') and request.session.get('is_driver'):
             # already a logged-in driver -> go to dashboard
             return redirect(reverse('driver_dashboard'))
-        return render(request, 'driver_login.html', {})
+        response = render(request, 'driver_login.html', {})
+    # ensure the login page isn't cached so back-button triggers server-side redirect
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    return response
 
     # --- POST ---
     mobile = (request.POST.get('mobile') or '').strip()
@@ -702,20 +706,7 @@ def driver_login(request):
 
     # --- Redirect to dashboard ---
     next_url = request.GET.get('next') or reverse('driver_dashboard')
-    html = f""
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Redirecting…</title>
-        <script>window.location.replace("{next_url}");</script>
-      </head>
-      <body>
-        <p>Redirecting… <a href="{next_url}">Click here if not redirected.</a></p>
-      </body>
-    </html>
-    ""
-    return HttpResponse(html)
+    return HttpResponseRedirect(next_url)
 
 
 
