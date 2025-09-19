@@ -232,36 +232,77 @@
     if(lastLat !== null && lastLng !== null) sendLocation(lastLat,lastLng,true);
   });
 
-  btnStop.addEventListener('click', (e)=>{
+  btnStop.addEventListener('click', async function (e) {
     e.preventDefault();
-    if(watchId !== null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
-    btnStart.disabled = false; btnStop.disabled = true; liveStatus.textContent = 'Not sharing';
-    // final offline ping
-    const data = JSON.stringify({ lat: lastLat, lng: lastLng, is_online:false });
-    try {
-      if(navigator.sendBeacon){
-        navigator.sendBeacon("{% url 'api_driver_live_update' %}", data);
-      } else {
-        fetch("{% url 'api_driver_live_update' %}", { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken}, body: data });
-      }
-    } catch(e){ /* best effort */ }
-  });
-
-  // On page unload: send final offline ping
-  window.addEventListener('beforeunload', function(){
-    if(watchId !== null){ try{ navigator.geolocation.clearWatch(watchId); } catch(e){} watchId = null; }
-    if(lastLat !== null && lastLng !== null){
-      const data = JSON.stringify({ lat: lastLat, lng: lastLng, is_online:false });
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    liveStatus.textContent = 'Not sharing';
+  
+    // ensure we actually send last known coords with is_online=false
+    if (lastLat !== null && lastLng !== null) {
       try {
-        if(navigator.sendBeacon){
-          navigator.sendBeacon("{% url 'api_driver_live_update' %}", data);
-        } else {
-          // fire-and-forget fallback (do not block)
-          fetch("{% url 'api_driver_live_update' %}", { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken}, body: data }).catch(()=>{});
-        }
-      } catch(e){}
+        await sendLocation(lastLat, lastLng, false);
+      } catch (err) {
+        console.warn('stop share send failed', err);
+      }
+    } else {
+      // no coords available: still try a best-effort ping (may be rejected by server if no existing live row)
+      try {
+        await sendLocation(null, null, false);
+      } catch (err) {
+        console.warn('stop share best-effort send failed', err);
+      }
     }
   });
+
+
+  // On page unload: send final offline ping
+  window.addEventListener('beforeunload', function () {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+  
+    // best-effort: send last coords as offline using fetch keepalive (includes X-CSRFToken)
+    if (lastLat !== null && lastLng !== null) {
+      try {
+        fetch("{% url 'api_driver_live_update' %}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify({lat: lastLat, lng: lastLng, is_online: false})
+        }).catch(()=>{});
+      } catch (e) {
+        // last-resort: try sendBeacon (no CSRF header, may be rejected)
+        try {
+          navigator.sendBeacon && navigator.sendBeacon("{% url 'api_driver_live_update' %}", JSON.stringify({lat: lastLat, lng: lastLng, is_online: false}));
+        } catch (er) {}
+      }
+    } else {
+      // no last coords — try a keepalive request without coords (server will use existing live row if any)
+      try {
+        fetch("{% url 'api_driver_live_update' %}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify({lat: null, lng: null, is_online: false})
+        }).catch(()=>{});
+      } catch (e) {}
+    }
+  });
+
 
   // Intercept logout link to send offline ping before leaving
   const logoutLink = document.getElementById('logout-link');
