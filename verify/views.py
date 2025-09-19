@@ -23,7 +23,7 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
-
+from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import get_object_or_404
 from .decorators import ceo_required
