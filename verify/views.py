@@ -702,7 +702,7 @@ def driver_login(request):
 
     # --- Redirect to dashboard ---
     next_url = request.GET.get('next') or reverse('driver_dashboard')
-    return HttpResponseRedirect(next_url)
+    return redirect(next_url)
 
 
 
