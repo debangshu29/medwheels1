@@ -232,20 +232,24 @@ def home(request):
     user = None
     first_name = None
 
-    user_id = request.session.get('user_id')
-    if user_id:
-        try:
-            user = Users.objects.get(pk=user_id)
-            if user.name:
-                first_name = user.name.strip().split()[0]
-            else:
-                if user.email:
-                    first_name = user.email.split('@')[0]
+    if request.session.get('is_driver'):
+        user = None
+        first_name = None
+    else:
+        user_id = request.session.get('user_id')
+        if user_id:
+            try:
+                user = Users.objects.get(pk=user_id)
+                if user.name:
+                    first_name = user.name.strip().split()[0]
                 else:
-                    first_name = user.phone_number or ''
-        except Users.DoesNotExist:
-            request.session.flush()
-            user = None
+                    if user.email:
+                        first_name = user.email.split('@')[0]
+                    else:
+                        first_name = user.phone_number or ''
+            except Users.DoesNotExist:
+                request.session.flush()
+                user = None
 
     return render(request, "home.html", {"user": user, "first_name": first_name})
 
@@ -630,6 +634,9 @@ def driver_login(request):
     - Logs in both custom Users session and Django auth user for Channels
     """
     if request.method == 'GET':
+        if request.session.get('user_id') and request.session.get('is_driver'):
+            # already a logged-in driver -> go to dashboard
+            return redirect(reverse('driver_dashboard'))
         return render(request, 'driver_login.html', {})
 
     # --- POST ---
@@ -695,7 +702,7 @@ def driver_login(request):
 
     # --- Redirect to dashboard ---
     next_url = request.GET.get('next') or reverse('driver_dashboard')
-    html = f"""
+    html = f""
     <!doctype html>
     <html>
       <head>
@@ -707,33 +714,45 @@ def driver_login(request):
         <p>Redirecting… <a href="{next_url}">Click here if not redirected.</a></p>
       </body>
     </html>
-    """
+    ""
     return HttpResponse(html)
 
 
+
 def driver_logout(request):
-    """
-    Logout driver and mark their live row offline (best-effort).
-    """
-    user_id = request.session.get('user_id')
-    if user_id:
-        try:
-            custom_user = Users.objects.get(pk=user_id)
-            # find driver profile
-            driver = Drivers.objects.filter(user=custom_user).first()
-            if driver:
+    
+    from django.contrib.auth import logout as auth_logout
+    # if driver, mark live offline
+    try:
+        if request.session.get('is_driver'):
+            user_id = request.session.get('user_id')
+            if user_id:
+                # attempt to set DriverLive.is_online = False
                 try:
-                    # mark DriverLive is_online False
-                    dl = DriverLive.objects.filter(driver=driver).first()
-                    if dl:
-                        dl.is_online = False
-                        dl.save(update_fields=['is_online'])
+                    driver = Drivers.objects.filter(user__id=user_id).first()
+                    if driver:
+                        DriverLive.objects.filter(driver=driver).update(is_online=False, last_seen=timezone.now())
+                        # notify via channel layer that driver is offline
+                        try:
+                            channel_layer = get_channel_layer()
+                            async_to_sync(channel_layer.group_send)(
+                                f"driver_{driver.id}",
+                                {
+                                    'type': 'location.update',
+                                    'driver_id': driver.id,
+                                    'lat': None,
+                                    'lng': None,
+                                    'is_online': False,
+                                    'last_seen': timezone.now().isoformat()
+                                }
+                            )
+                        except Exception:
+                            pass
                 except Exception:
                     pass
-        except Users.DoesNotExist:
-            pass
+    except Exception:
+        pass
 
-    # Log out Django auth and clear session
     auth_logout(request)
     request.session.flush()
-    return redirect(reverse('driver_login'))
+    return redirect(reverse('home'))
