@@ -637,11 +637,7 @@ def driver_login(request):
         if request.session.get('user_id') and request.session.get('is_driver'):
             # already a logged-in driver -> go to dashboard
             return redirect(reverse('driver_dashboard'))
-        response = render(request, 'driver_login.html', {})
-    # ensure the login page isn't cached so back-button triggers server-side redirect
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response['Pragma'] = 'no-cache'
-    return response
+        return render(request, 'driver_login.html', {})
 
     # --- POST ---
     mobile = (request.POST.get('mobile') or '').strip()
