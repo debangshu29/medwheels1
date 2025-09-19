@@ -13,6 +13,6 @@ urlpatterns = [
     path('driver/set-password/<uidb64>/<token>/', views.driver_set_password, name='driver_set_password'),
     path('driver/driver_login/', views.driver_login, name='driver_login'),
     path('driver/', views.driver_page, name='driver_page')
-    # path('driver/dashboard/', views.driver_dashboard, name='driver_dashboard'),
+    path('driver/logout/', verify_views.driver_logout, name='driver_logout'),
 
 ]
