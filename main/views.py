@@ -190,11 +190,9 @@ def driver_dashboard(request):
 @require_POST
 def api_driver_live_update(request):
     """
-    Receive JSON { lat: <float>, lng: <float>, is_online: true/false } from driver dashboard.
-    Updates/creates DriverLive and appends DriverLocation.
-    Also broadcasts a group message to WebSocket clients subscribed to group "driver_<id>".
+    Receive JSON { lat: <float|null>, lng: <float|null>, is_online: true/false } from driver dashboard.
+    If lat/lng are omitted (null), we still accept the request and update is_online/last_seen.
     """
-    # find driver for session
     driver, auth_err = _get_driver_for_session(request)
     if auth_err:
         return auth_err
@@ -207,49 +205,67 @@ def api_driver_live_update(request):
             content_type='application/json'
         )
 
-    lat = payload.get('lat')
-    lng = payload.get('lng')
+    raw_lat = payload.get('lat', None)
+    raw_lng = payload.get('lng', None)
     is_online = payload.get('is_online', True)
 
-    if lat is None or lng is None:
-        return HttpResponseBadRequest(
-            json.dumps({'ok': False, 'error': 'lat and lng required'}),
-            content_type='application/json'
-        )
+    # Try to get existing live row if present
+    existing_live = DriverLive.objects.filter(driver=driver).first()
 
-    # coercion and validation
-    try:
-        lat = Decimal(str(lat))
-        lng = Decimal(str(lng))
-    except Exception:
-        return HttpResponseBadRequest(
-            json.dumps({'ok': False, 'error': 'invalid lat/lng'}),
-            content_type='application/json'
-        )
+    # If coordinates are missing in payload, try to reuse existing coords (may be None)
+    if raw_lat is None or raw_lng is None:
+        if existing_live:
+            lat = existing_live.latitude
+            lng = existing_live.longitude
+        else:
+            # No coords available anywhere — require coords for initial create
+            return HttpResponseBadRequest(
+                json.dumps({'ok': False, 'error': 'lat and lng required for initial update'}),
+                content_type='application/json'
+            )
+    else:
+        # coerce provided coordinates
+        try:
+            lat = Decimal(str(raw_lat))
+            lng = Decimal(str(raw_lng))
+        except Exception:
+            return HttpResponseBadRequest(
+                json.dumps({'ok': False, 'error': 'invalid lat/lng'}),
+                content_type='application/json'
+            )
 
     now = timezone.now()
 
     # update or create DriverLive row
-    live_obj, created = DriverLive.objects.update_or_create(
-        driver=driver,
-        defaults={'latitude': lat, 'longitude': lng, 'is_online': bool(is_online), 'last_seen': now}
-    )
-
-    # append telemetry (DriverLocation) - keep as append-only
     try:
-        DriverLocation.objects.create(
+        live_obj, created = DriverLive.objects.update_or_create(
             driver=driver,
-            latitude=lat,
-            longitude=lng,
-            recorded_at=now
+            defaults={
+                'latitude': lat,
+                'longitude': lng,
+                'is_online': bool(is_online),
+                'last_seen': now
+            }
         )
-    except Exception:
-        # If this fails for any reason, we still want to return success for live update.
-        # Log in real app.
-        pass
+    except Exception as e:
+        logger.exception("api_driver_live_update: update_or_create failed for driver=%s: %s", getattr(driver, 'id', None), e)
+        return JsonResponse({'ok': False, 'error': 'server error', 'detail': str(e)}, status=500)
 
-    # --- BROADCAST to WebSocket group (so any user subscribed to this driver's group gets the update) ---
-    # existing broadcast to driver_{id}
+    # append telemetry (DriverLocation) only if we have actual numeric coords
+    try:
+        if lat is not None and lng is not None:
+            # ensure float/dDecimal is stored as Decimal in model
+            DriverLocation.objects.create(
+                driver=driver,
+                latitude=lat,
+                longitude=lng,
+                recorded_at=now
+            )
+    except Exception:
+        # non-fatal
+        logger.exception("api_driver_live_update: failed to create DriverLocation for driver=%s", getattr(driver, 'id', None))
+
+    # notify websockets (driver group + assigned rides) — keep as before
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -257,31 +273,31 @@ def api_driver_live_update(request):
             {
                 'type': 'location.update',
                 'driver_id': driver.id,
-                'lat': float(lat),
-                'lng': float(lng),
+                'lat': float(lat) if lat is not None else None,
+                'lng': float(lng) if lng is not None else None,
                 'is_online': bool(is_online),
                 'last_seen': now.isoformat()
             }
         )
-        # Also notify any rider(s) with assigned rides to this driver
-        # Find rides with status where the rider should be tracking: assigned / accepted / on_trip
+
         assigned_rides = Ride.objects.filter(driver=driver,
-                                             status__in=['assigned', 'accepted', 'on_trip'])  # adapt statuses you use
+                                             status__in=['assigned', 'accepted', 'on_trip'])
         for r in assigned_rides:
             async_to_sync(channel_layer.group_send)(
                 f"ride_{r.id}",
                 {
                     'type': 'location.update',
                     'driver_id': driver.id,
-                    'lat': float(lat),
-                    'lng': float(lng),
+                    'lat': float(lat) if lat is not None else None,
+                    'lng': float(lng) if lng is not None else None,
                     'last_seen': now.isoformat()
                 }
             )
     except Exception:
-        pass
+        logger.exception("api_driver_live_update: websocket notify failed for driver=%s", getattr(driver, 'id', None))
 
-    return JsonResponse({'ok': True, 'last_seen': now.isoformat()})
+    return JsonResponse({'ok': True, 'last_seen': now.isoformat(), 'is_online': bool(is_online)})
+
 
 
 @require_GET
