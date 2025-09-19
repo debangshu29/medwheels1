@@ -695,4 +695,17 @@ def driver_login(request):
 
     # --- Redirect to dashboard ---
     next_url = request.GET.get('next') or reverse('driver_dashboard')
-    return redirect(next_url)
+    html = f"""
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Redirecting…</title>
+        <script>window.location.replace("{next_url}");</script>
+      </head>
+      <body>
+        <p>Redirecting… <a href="{next_url}">Click here if not redirected.</a></p>
+      </body>
+    </html>
+    """
+    return HttpResponse(html)
