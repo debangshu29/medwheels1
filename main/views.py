@@ -722,18 +722,27 @@ def api_driver_respond(request):
     try:
         payload = json.loads(request.body.decode('utf-8'))
     except Exception:
-        return HttpResponseBadRequest(json.dumps({'ok': False, 'error': 'invalid json'}), content_type='application/json')
+        return HttpResponseBadRequest(
+            json.dumps({'ok': False, 'error': 'invalid json'}),
+            content_type='application/json'
+        )
 
     ride_id = payload.get('ride_id')
     action = payload.get('action')
 
     if not ride_id or action not in ('accept', 'reject'):
-        return HttpResponseBadRequest(json.dumps({'ok': False, 'error': 'ride_id and action required'}), content_type='application/json')
+        return HttpResponseBadRequest(
+            json.dumps({'ok': False, 'error': 'ride_id and action required'}),
+            content_type='application/json'
+        )
 
     try:
         ride_id = int(ride_id)
     except Exception:
-        return HttpResponseBadRequest(json.dumps({'ok': False, 'error': 'invalid ride_id'}), content_type='application/json')
+        return HttpResponseBadRequest(
+            json.dumps({'ok': False, 'error': 'invalid ride_id'}),
+            content_type='application/json'
+        )
 
     if action == 'reject':
         # Optionally record rejection (not implemented here). Just return ok.
@@ -759,53 +768,66 @@ def api_driver_respond(request):
             ride.assigned_at = timezone.now() if hasattr(ride, 'assigned_at') else timezone.now()
             ride.save()
 
-            # Prepare driver payload for broadcast to rider
+            # Build driver payload
             driver_payload = {
                 'id': driver.id,
                 'name': getattr(driver, 'full_name', '') or str(driver.id),
                 'phone': getattr(driver.user, 'phone', '') or '',
                 'vehicle_no': getattr(driver, 'vehicle_no', '') or getattr(driver, 'vehicle_number', '') or '',
                 'vehicle_type': getattr(driver, 'vehicle_type', '') or '',
-                'photo_url': None
+                'photo_url': None,
             }
             # Try to fill photo_url
             doc = DriverDocuments.objects.filter(driver=driver).order_by('-uploaded_at').first()
             if doc and getattr(doc, 'photo', None) and hasattr(doc.photo, 'url'):
                 driver_payload['photo_url'] = request.build_absolute_uri(doc.photo.url)
-            else:
-                # fallback to user profile pic if any
-                if getattr(driver.user, 'profile_picture', None):
-                    driver_payload['photo_url'] = driver.user.profile_picture
+            elif getattr(driver.user, 'profile_picture', None):
+                driver_payload['photo_url'] = driver.user.profile_picture
 
-            # Send a message to the rider's websocket group (ride_{ride.id})
+            # --- ETA Calculation ---
+            eta_min = None
+            if getattr(driver, 'live', None) and driver.live.latitude and driver.live.longitude:
+                try:
+                    d_m = haversine_m(
+                        float(driver.live.latitude), float(driver.live.longitude),
+                        float(ride.pickup_lat), float(ride.pickup_lng)
+                    )
+                    d_km = d_m / 1000.0
+                    AVG_SPEED_KMPH = 25.0  # configurable if needed
+                    eta_min = int((d_km / AVG_SPEED_KMPH) * 60)
+                except Exception:
+                    pass
+
+            # Send to rider's websocket group
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 f"ride_{ride.id}",
                 {
-                    'type': 'ride.assigned',
-                    'driver': driver_payload,
-                    # include driver's last known location if available
-                    'lat': float(driver.live.latitude) if getattr(driver, 'live', None) and driver.live.latitude is not None else None,
-                    'lng': float(driver.live.longitude) if getattr(driver, 'live', None) and driver.live.longitude is not None else None,
-                    'eta_min': None,  # optionally compute ETA here and add
-                    'fare': getattr(ride, 'fare', None),
+                    "type": "ride.assigned",
+                    "driver": driver_payload,
+                    "lat": float(driver.live.latitude) if getattr(driver, 'live', None) and driver.live.latitude else None,
+                    "lng": float(driver.live.longitude) if getattr(driver, 'live', None) and driver.live.longitude else None,
+                    "eta_min": eta_min,
+                    "fare": getattr(ride, "fare", None),
                 }
             )
 
-            # Optionally inform the driver (their websocket) they were assigned for UI.
+            # Inform driver that assignment confirmed
             async_to_sync(channel_layer.group_send)(
                 f"driver_{driver.id}",
                 {
-                    'type': 'driver.assignment_confirmed',
-                    'ride_id': ride.id,
+                    "type": "driver.assignment_confirmed",
+                    "ride_id": ride.id,
                 }
             )
 
             return JsonResponse({'ok': True, 'assigned': True, 'ride_id': ride.id})
+
     except Ride.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'ride not found'}, status=404)
     except Exception as e:
         return JsonResponse({'ok': False, 'error': 'server error', 'detail': str(e)}, status=500)
+
 
 
 @require_POST
