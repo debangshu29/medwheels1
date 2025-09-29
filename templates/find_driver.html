@@ -520,42 +520,48 @@
 
         function onMatchingFailed(){ stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown(); document.getElementById('left-title').textContent = 'No drivers available'; document.getElementById('summary-box').querySelector('.note').textContent = 'No drivers available nearby. Try again later or widen search radius.'; showNoDriversModal('No drivers were found. You can retry matching or try again later.'); }
 
-        function onDriverAssigned(driverObj){ stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown(); currentSearchRadius = INITIAL_SEARCH_RADIUS_M; const tpl = document.getElementById('assigned-template'); const left = document.getElementById('left-panel'); left.innerHTML = ''; left.appendChild(tpl.content.cloneNode(true)); document.getElementById('drv-photo').src = driverObj.photo_url || '{% static "img/default_driver.jpg" %}'; document.getElementById('drv-name').textContent = driverObj.name || 'Driver'; document.getElementById('drv-vehicle').textContent = (driverObj.vehicle_no || '') + (driverObj.vehicle_type ? (' • ' + driverObj.vehicle_type) : ''); if(driverObj.eta_min){
-    const etaSec = driverObj.eta_min * 60;
-    document.getElementById('drv-eta').textContent = `Arriving in ${driverObj.eta_min} min`;
-    startEtaCountdown(etaSec);   // <-- start countdown
-  } else {
-    document.getElementById('drv-eta').textContent = '';
-  }  setSummaryUI(CURRENT_RIDE.pickup, CURRENT_RIDE.drop, CURRENT_RIDE.fare); const cancelAssignedBtn = document.getElementById('cancel-assigned-btn'); if(cancelAssignedBtn) cancelAssignedBtn.addEventListener('click', function(){ openCancelConfirm(CURRENT_RIDE.id); }); if(driverObj.lat && driverObj.lng) { updateDriverLocation(Number(driverObj.lat), Number(driverObj.lng), driverObj.name || 'Driver'); } if(driverObj.lat && driverObj.lng){ drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) }, { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }); } else { if(CURRENT_RIDE.drop) drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }, { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) }); } }
+        function onDriverAssigned(payload){
+  stopPulse(); stopProgressBar(); stopMatchingPolling(); clearNearbyMarkers(); stopEtaCountdown();
 
-        function onDriverLocationUpdate(loc){
-  updateDriverLocation(Number(loc.lat), Number(loc.lng));
+  const driverObj = payload.driver || {};
+  const tpl = document.getElementById('assigned-template');
+  const left = document.getElementById('left-panel');
+  left.innerHTML = '';
+  left.appendChild(tpl.content.cloneNode(true));
 
-  // Recalculate ETA whenever driver location updates
-  if(CURRENT_RIDE && CURRENT_RIDE.pickup){
-    try {
-      const dx = Number(loc.lat) - Number(CURRENT_RIDE.pickup.lat);
-      const dy = Number(loc.lng) - Number(CURRENT_RIDE.pickup.lng);
-      const approx_m = Math.sqrt(dx*dx + dy*dy) * 111000; // rough meters
-      const speed_mps = (AVG_SPEED_KMPH * 1000) / 3600;
-      const etaSec = Math.max(5, Math.round(approx_m / speed_mps));
-      startEtaCountdown(etaSec);
+  document.getElementById('drv-photo').src = driverObj.photo_url || '{% static "img/default_driver.jpg" %}';
+  document.getElementById('drv-name').textContent = driverObj.name || 'Driver';
+  document.getElementById('drv-vehicle').textContent = (driverObj.vehicle_no || '') +
+      (driverObj.vehicle_type ? (' • ' + driverObj.vehicle_type) : '');
 
-      // also update ETA text in driver card if present
-      const drvEtaEl = document.getElementById('drv-eta');
-if(drvEtaEl) drvEtaEl.textContent = `Arriving in ${formatEtaSeconds(etaSec)}`;
+  // ETA
+  if(payload.eta_min){
+    const etaSec = payload.eta_min * 60;
+    document.getElementById('drv-eta').textContent = `Arriving in ${payload.eta_min} min`;
+    startEtaCountdown(etaSec);
+  }
 
-const sumEtaEl = document.getElementById('ui-closest-eta');
-if(sumEtaEl) sumEtaEl.textContent = formatEtaSeconds(etaSec);
+  // Ride summary
+  setSummaryUI(CURRENT_RIDE.pickup, CURRENT_RIDE.drop, payload.fare);
 
-    } catch(e){ console.warn("ETA update failed", e); }
+  // Cancel button
+  const cancelAssignedBtn = document.getElementById('cancel-assigned-btn');
+  if(cancelAssignedBtn) cancelAssignedBtn.addEventListener('click', function(){ openCancelConfirm(CURRENT_RIDE.id); });
+
+  // Map update
+  if(payload.lat && payload.lng) {
+    updateDriverLocation(Number(payload.lat), Number(payload.lng), driverObj.name || 'Driver');
+    drawRoute({ lat: Number(payload.lat), lng: Number(payload.lng) }, { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) });
+  } else if(CURRENT_RIDE.drop) {
+    drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }, { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) });
   }
 }
 
 
+
         function cancelRide(rideId){ const rid = rideId || (CURRENT_RIDE && CURRENT_RIDE.id); if(!rid){ console.warn('no ride id to cancel'); return; } openCancelConfirm(rid); }
 
-        function connectRideSocket(rideId){ if(!rideId) return null; if(SOCKET){ SOCKET.close(); SOCKET = null; } const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'; const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`; SOCKET = new WebSocket(url); SOCKET.onopen = () => console.log('ride socket open', url); SOCKET.onmessage = (ev) => { try { const data = JSON.parse(ev.data); if(data.type === 'ride.assigned'){ onDriverAssigned(data.driver || {}); } else if(data.type === 'location.update'){ onDriverLocationUpdate(data); } else if(data.type === 'ride.matching_failed'){ onMatchingFailed(); } else if(data.type === 'ride.cancelled'){ openCancelResult('Ride cancelled by driver/system.', true); } else { console.log('ride socket msg', data); } } catch(e){ console.warn('socket parse error', e); } }; SOCKET.onclose = () => console.log('ride socket closed'); SOCKET.onerror = (err) => console.error('ride socket error', err); return SOCKET; }
+        function connectRideSocket(rideId){ if(!rideId) return null; if(SOCKET){ SOCKET.close(); SOCKET = null; } const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'; const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`; SOCKET = new WebSocket(url); SOCKET.onopen = () => console.log('ride socket open', url); SOCKET.onmessage = (ev) => { try { const data = JSON.parse(ev.data); if(data.type === 'ride.assigned'){ onDriverAssigned(data); } else if(data.type === 'location.update'){ onDriverLocationUpdate(data); } else if(data.type === 'ride.matching_failed'){ onMatchingFailed(); } else if(data.type === 'ride.cancelled'){ openCancelResult('Ride cancelled by driver/system.', true); } else { console.log('ride socket msg', data); } } catch(e){ console.warn('socket parse error', e); } }; SOCKET.onclose = () => console.log('ride socket closed'); SOCKET.onerror = (err) => console.error('ride socket error', err); return SOCKET; }
 
         document.getElementById('cancel-matching-btn').addEventListener('click', function(){ cancelRide(CURRENT_RIDE && CURRENT_RIDE.id); });
 
