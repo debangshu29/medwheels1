@@ -810,8 +810,7 @@ function connectRideSocket(rideId) {
     SOCKET = null;
   }
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const sessionid = getCookie('sessionid');  // 🔑 get session cookie
-  const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/?sessionid=${sessionid}`;
+  const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`;
 
   SOCKET = new WebSocket(url);
 
@@ -840,6 +839,7 @@ function connectRideSocket(rideId) {
   SOCKET.onerror = (err) => console.error('ride socket error', err);
   return SOCKET;
 }
+
 
 
 
