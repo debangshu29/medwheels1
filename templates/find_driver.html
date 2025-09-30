@@ -805,7 +805,9 @@ function connectRideSocket(rideId) {
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`;
 
+  // ✅ FIX: make sure cookies/sessionid are passed
   SOCKET = new WebSocket(url);
+  SOCKET.withCredentials = true;   // <-- ADD THIS
 
   SOCKET.onopen = () => console.log('ride socket open', url);
 
@@ -832,6 +834,7 @@ function connectRideSocket(rideId) {
   SOCKET.onerror = (err) => console.error('ride socket error', err);
   return SOCKET;
 }
+
 
 document.getElementById('cancel-matching-btn').addEventListener('click', function () {
   cancelRide(CURRENT_RIDE && CURRENT_RIDE.id);
