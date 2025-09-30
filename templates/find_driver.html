@@ -809,11 +809,16 @@ function connectRideSocket(rideId) {
     SOCKET.close();
     SOCKET = null;
   }
+
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`;
 
+  // ✅ WebSocket with session cookies
   SOCKET = new WebSocket(url);
 
+  // ✅ Tell Django/Channels this connection should carry credentials
+  // (the important part is that the browser includes `sessionid` + `csrftoken` cookies automatically
+  // because we are connecting to the SAME origin)
   SOCKET.onopen = () => console.log('ride socket open', url);
 
   SOCKET.onmessage = (ev) => {
