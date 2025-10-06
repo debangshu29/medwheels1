@@ -653,11 +653,7 @@ def api_request_ambulance_type(request):
 def find_driver_view(request, ride_id):
     """
     Render the find_driver.html page for a rider to watch matching/assignment.
-    Ensures the current session user owns the ride (simple safety).
-    The template will receive:
-       - GOOGLE_MAPS_API_KEY
-       - DEFAULT_MAP_CENTER
-       - ride_json -> JSON blob with ride_id, pickup, drop, fare
+    Ensures the current session user owns the ride.
     """
     google_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', 'YOUR_GOOGLE_API_KEY')
 
@@ -666,14 +662,10 @@ def find_driver_view(request, ride_id):
     except Ride.DoesNotExist:
         raise Http404("Ride not found")
 
-    # Basic ownership check: your app uses session['user_id']
     user_id = request.session.get('user_id')
     if not user_id or ride.user_id != int(user_id):
-        # Option: allow viewing if you prefer; for privacy we require owner.
         return HttpResponseForbidden("Permission denied")
 
-    # Build ride JSON for the template (only necessary fields)
-    # Use estimated_fare or final_fare if present
     fare_val = None
     if getattr(ride, 'estimated_fare', None) is not None:
         fare_val = float(ride.estimated_fare)
@@ -687,11 +679,11 @@ def find_driver_view(request, ride_id):
             'lng': float(ride.pickup_lng) if ride.pickup_lng is not None else None,
             'address': ride.pickup_address or ''
         },
-        # intentionally named "drop" to match template JS
         'drop': None,
         'fare': fare_val,
-        'status': ride.status
+        'status': ride.status,
     }
+
     if ride.dropoff_lat is not None and ride.dropoff_lng is not None:
         ride_payload['drop'] = {
             'lat': float(ride.dropoff_lat),
@@ -699,11 +691,36 @@ def find_driver_view(request, ride_id):
             'address': ride.dropoff_address or ''
         }
 
+    # include driver info if ride already assigned
+    driver_data = None
+    if ride.status == 'assigned' and ride.driver:
+        d = ride.driver
+        live = getattr(d, 'live', None)
+        driver_data = {
+            'id': d.id,
+            'name': getattr(d, 'full_name', '') or str(d.id),
+            'phone': getattr(d.user, 'phone', '') or '',
+            'vehicle_no': getattr(d, 'vehicle_no', '') or getattr(d, 'vehicle_number', ''),
+            'vehicle_type': getattr(d, 'vehicle_type', ''),
+            'photo_url': None,
+            'lat': getattr(live, 'latitude', None),
+            'lng': getattr(live, 'longitude', None),
+        }
+
+        doc = DriverDocuments.objects.filter(driver=d).order_by('-uploaded_at').first()
+        if doc and getattr(doc, 'photo', None) and hasattr(doc.photo, 'url'):
+            driver_data['photo_url'] = request.build_absolute_uri(doc.photo.url)
+        elif getattr(d.user, 'profile_picture', None):
+            driver_data['photo_url'] = d.user.profile_picture
+
+        ride_payload['driver'] = driver_data
+
     return render(request, 'find_driver.html', {
         'GOOGLE_MAPS_API_KEY': google_key,
         'DEFAULT_MAP_CENTER': DEFAULT_MAP_CENTER,
-        'ride_json': json.dumps(ride_payload)
+        'ride_json': json.dumps(ride_payload),
     })
+
 
 
 
@@ -745,30 +762,25 @@ def api_driver_respond(request):
         )
 
     if action == 'reject':
-        # Optionally record rejection (not implemented here). Just return ok.
         return JsonResponse({'ok': True, 'rejected': True})
 
-    # action == 'accept' -> attempt atomic assignment
     try:
         with transaction.atomic():
-            # Lock the ride row
             ride = Ride.objects.select_for_update().get(pk=ride_id)
 
-            # validation checks
+            # --- Validation ---
             if ride.driver_id is not None:
-                # already assigned
                 return JsonResponse({'ok': False, 'assigned': False, 'error': 'already assigned'})
-
             if ride.status not in ('matching', 'requested'):
                 return JsonResponse({'ok': False, 'assigned': False, 'error': f'invalid ride status: {ride.status}'})
 
-            # Everything ok -> assign
+            # --- Assign driver ---
             ride.driver = driver
             ride.status = 'assigned'
-            ride.assigned_at = timezone.now() if hasattr(ride, 'assigned_at') else timezone.now()
+            ride.assigned_at = timezone.now()
             ride.save()
 
-            # Build driver payload
+            # --- Build driver payload ---
             driver_payload = {
                 'id': driver.id,
                 'name': getattr(driver, 'full_name', '') or str(driver.id),
@@ -776,49 +788,54 @@ def api_driver_respond(request):
                 'vehicle_no': getattr(driver, 'vehicle_no', '') or getattr(driver, 'vehicle_number', '') or '',
                 'vehicle_type': getattr(driver, 'vehicle_type', '') or '',
                 'photo_url': None,
+                'lat': None,
+                'lng': None,
+                'eta_min': None,
             }
-            # Try to fill photo_url
+
+            # photo url
             doc = DriverDocuments.objects.filter(driver=driver).order_by('-uploaded_at').first()
             if doc and getattr(doc, 'photo', None) and hasattr(doc.photo, 'url'):
                 driver_payload['photo_url'] = request.build_absolute_uri(doc.photo.url)
             elif getattr(driver.user, 'profile_picture', None):
                 driver_payload['photo_url'] = driver.user.profile_picture
 
+            # live coordinates
+            if getattr(driver, 'live', None):
+                driver_payload['lat'] = float(driver.live.latitude) if driver.live.latitude else None
+                driver_payload['lng'] = float(driver.live.longitude) if driver.live.longitude else None
+
             # --- ETA Calculation ---
-            eta_min = None
-            if getattr(driver, 'live', None) and driver.live.latitude and driver.live.longitude:
+            if driver_payload['lat'] and driver_payload['lng']:
                 try:
                     d_m = haversine_m(
-                        float(driver.live.latitude), float(driver.live.longitude),
+                        float(driver_payload['lat']), float(driver_payload['lng']),
                         float(ride.pickup_lat), float(ride.pickup_lng)
                     )
                     d_km = d_m / 1000.0
-                    AVG_SPEED_KMPH = 25.0  # configurable if needed
-                    eta_min = int((d_km / AVG_SPEED_KMPH) * 60)
+                    AVG_SPEED_KMPH = 25.0
+                    driver_payload['eta_min'] = int((d_km / AVG_SPEED_KMPH) * 60)
                 except Exception:
-                    pass
+                    driver_payload['eta_min'] = None
 
-            # Send to rider's websocket group
+            # --- Notify rider via WebSocket ---
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 f"ride_{ride.id}",
                 {
                     "type": "ride.assigned",
                     "driver": driver_payload,
-                    "lat": float(driver.live.latitude) if getattr(driver, 'live', None) and driver.live.latitude else None,
-                    "lng": float(driver.live.longitude) if getattr(driver, 'live', None) and driver.live.longitude else None,
-                    "eta_min": eta_min,
+                    "lat": driver_payload["lat"],
+                    "lng": driver_payload["lng"],
+                    "eta_min": driver_payload["eta_min"],
                     "fare": getattr(ride, "fare", None),
                 }
             )
 
-            # Inform driver that assignment confirmed
+            # --- Notify driver their acceptance succeeded ---
             async_to_sync(channel_layer.group_send)(
                 f"driver_{driver.id}",
-                {
-                    "type": "driver.assignment_confirmed",
-                    "ride_id": ride.id,
-                }
+                {"type": "driver.assignment_confirmed", "ride_id": ride.id}
             )
 
             return JsonResponse({'ok': True, 'assigned': True, 'ride_id': ride.id})
@@ -827,6 +844,7 @@ def api_driver_respond(request):
         return JsonResponse({'ok': False, 'error': 'ride not found'}, status=404)
     except Exception as e:
         return JsonResponse({'ok': False, 'error': 'server error', 'detail': str(e)}, status=500)
+
 
 
 
