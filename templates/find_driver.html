@@ -822,17 +822,15 @@ function connectRideSocket(rideId) {
     SOCKET = null;
   }
 
+  // Always build same-origin URL to preserve cookies
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`;
+  const base = window.location.host;
+  const url = `${scheme}://${base}/ws/ride/${rideId}/`;
 
-  // ✅ WebSocket with session cookies
+  // ✅ Ensure cookies (sessionid, csrftoken) are automatically sent
   SOCKET = new WebSocket(url);
 
-  // ✅ Tell Django/Channels this connection should carry credentials
-  // (the important part is that the browser includes `sessionid` + `csrftoken` cookies automatically
-  // because we are connecting to the SAME origin)
   SOCKET.onopen = () => console.log('ride socket open', url);
-
   SOCKET.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data);
@@ -851,16 +849,12 @@ function connectRideSocket(rideId) {
       console.warn('socket parse error', e);
     }
   };
-
-  SOCKET.onclose = (e) => {
-    console.log('ride socket closed', e.code);
-    if (e.code !== 4001 && e.code !== 4003) {
-      setTimeout(() => connectRideSocket(rideId), 5000);
-    }
-  };
+  SOCKET.onclose = (e) => console.log('ride socket closed', e.code, e.reason);
   SOCKET.onerror = (err) => console.error('ride socket error', err);
+
   return SOCKET;
 }
+
 
 
 
@@ -911,3 +905,4 @@ initMapFindDriver();
 </body>
 
 </html>
+
