@@ -174,18 +174,73 @@ class RideConsumer(AsyncWebsocketConsumer):
             logger.warning("RideConsumer.connect: invalid ride_id: %s; scope=%s", e, self.scope.get('url_route'))
             await self.close(code=4002)
             return
+
         logger.info("WS handshake scope headers: %s", self.scope.get('headers'))
-        logger.info("WS handshake cookies: %s", getattr(self.scope, 'cookies', None))
-        
+        # show cookie header (raw) for debugging
+        cookie_hdr = None
+        for k, v in self.scope.get('headers', []):
+            if k == b'cookie':
+                try:
+                    cookie_hdr = v.decode()
+                except Exception:
+                    cookie_hdr = None
+                break
+        logger.info("WS handshake cookie header: %s", cookie_hdr)
+        logger.info("WS handshake cookies (scope): %s", getattr(self.scope, 'cookies', None))
+
+        # First try the normal middleware-provided user (AuthMiddlewareStack)
         user = self.scope.get('user')
         logger.info("RideConsumer.connect attempt ride_id=%s user_id=%s client=%s",
                     self.ride_id, getattr(user, 'id', None), self.scope.get('client'))
 
-        if not user or not user.is_authenticated:
+        # If no user provided by middleware, try fallback: parse sessionid from cookie header
+        if not user or not getattr(user, 'is_authenticated', False):
+            if cookie_hdr:
+                try:
+                    # parse cookie header manually
+                    cookies = {}
+                    for part in cookie_hdr.split(';'):
+                        if not part:
+                            continue
+                        if '=' not in part:
+                            continue
+                        name, val = part.split('=', 1)
+                        cookies[name.strip()] = val.strip()
+
+                    session_cookie_name = getattr(settings, 'SESSION_COOKIE_NAME', 'sessionid')
+                    session_key = cookies.get(session_cookie_name) or cookies.get('sessionid')
+
+                    if session_key:
+                        # load session row and decode to get auth user id
+                        try:
+                            session_obj = await database_sync_to_async(Session.objects.get)(session_key=session_key)
+                            session_data = session_obj.get_decoded()
+                            auth_user_id = session_data.get('_auth_user_id') or session_data.get('_auth_user_backend') and session_data.get('_auth_user_id')
+                            if auth_user_id:
+                                # load User object
+                                try:
+                                    user_obj = await database_sync_to_async(User.objects.get)(pk=int(auth_user_id))
+                                    # attach to scope for downstream checks
+                                    self.scope['user'] = user_obj
+                                    user = self.scope['user']
+                                    logger.info("RideConsumer.connect: fallback session auth succeeded user_id=%s", getattr(user, 'id', None))
+                                except Exception as e:
+                                    logger.info("RideConsumer.connect: fallback user load failed: %s", e)
+                        except Session.DoesNotExist:
+                            logger.info("RideConsumer.connect: fallback session not found for key=%s", session_key)
+                        except Exception as e:
+                            logger.exception("RideConsumer.connect: error loading session during fallback: %s", e)
+                except Exception as e:
+                    logger.exception("RideConsumer.connect: cookie parse/fallback error: %s", e)
+
+        # final auth check
+        user = self.scope.get('user')
+        if not user or not getattr(user, 'is_authenticated', False):
             logger.info("RideConsumer.connect: unauthenticated -> close(4001)")
             await self.close(code=4001)
             return
 
+        # load ride and ownership checks (as before)
         try:
             ride = await database_sync_to_async(Ride.objects.get)(pk=self.ride_id)
         except Ride.DoesNotExist:
