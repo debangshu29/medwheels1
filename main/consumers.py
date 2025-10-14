@@ -250,3 +250,10 @@ class RideConsumer(AsyncWebsocketConsumer):
 
     async def send_json(self, payload):
         await self.send(text_data=json.dumps(payload))
+
+    # 👇 This method receives messages from group_send(type='ride.assigned')
+    async def ride_assigned(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "ride.assigned",
+            "driver": event["driver"]
+        }))
