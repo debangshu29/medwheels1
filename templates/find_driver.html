@@ -774,29 +774,17 @@ function onDriverAssigned(driverObj) {
 
   if (driverObj.lat && driverObj.lng) {
     updateDriverLocation(Number(driverObj.lat), Number(driverObj.lng), driverObj.name || 'Driver');
-    // 🟢 ADDED: draw route from driver to pickup
-    drawRoute(
-      { lat: Number(driverObj.lat), lng: Number(driverObj.lng) },
-      { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }
-    );
-  } else if (CURRENT_RIDE.drop) {
-    drawRoute(
-      { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) },
-      { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) }
-    );
   }
-  if (driverObj.eta_min) startEtaCountdown(driverObj.eta_min * 60);
+
+  if (driverObj.lat && driverObj.lng) {
+    drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) }, { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) });
+  } else {
+    if (CURRENT_RIDE.drop) drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }, { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) });
+  }
 }
 
 function onDriverLocationUpdate(loc) {
   updateDriverLocation(Number(loc.lat), Number(loc.lng));
-  if (CURRENT_RIDE && CURRENT_RIDE.pickup) {
-    const dx = CURRENT_RIDE.pickup.lat - loc.lat;
-    const dy = CURRENT_RIDE.pickup.lng - loc.lng;
-    const dist_km = Math.sqrt(dx * dx + dy * dy) * 111; // rough km/degree
-    const eta_sec = Math.round((dist_km / AVG_SPEED_KMPH) * 3600);
-    startEtaCountdown(eta_sec);
-  }
 }
 
 function cancelRide(rideId) {
@@ -822,15 +810,17 @@ function connectRideSocket(rideId) {
     SOCKET = null;
   }
 
-  // Always build same-origin URL to preserve cookies
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const base = window.location.host;
-  const url = `${scheme}://${base}/ws/ride/${rideId}/`;
+  const url = `${scheme}://${window.location.host}/ws/ride/${rideId}/`;
 
-  // ✅ Ensure cookies (sessionid, csrftoken) are automatically sent
+  // ✅ WebSocket with session cookies
   SOCKET = new WebSocket(url);
 
+  // ✅ Tell Django/Channels this connection should carry credentials
+  // (the important part is that the browser includes `sessionid` + `csrftoken` cookies automatically
+  // because we are connecting to the SAME origin)
   SOCKET.onopen = () => console.log('ride socket open', url);
+
   SOCKET.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data);
@@ -849,12 +839,11 @@ function connectRideSocket(rideId) {
       console.warn('socket parse error', e);
     }
   };
-  SOCKET.onclose = (e) => console.log('ride socket closed', e.code, e.reason);
-  SOCKET.onerror = (err) => console.error('ride socket error', err);
 
+  SOCKET.onclose = () => console.log('ride socket closed');
+  SOCKET.onerror = (err) => console.error('ride socket error', err);
   return SOCKET;
 }
-
 
 
 
@@ -884,16 +873,8 @@ initMapFindDriver();
       } : null;
 
       setTimeout(() => {
+        startMatching(RIDE.ride_id, pickup, drop, RIDE.fare);
         connectRideSocket(RIDE.ride_id);
-
-        // 🟢 If ride already assigned, skip matching & directly show driver
-        if (RIDE.status === 'assigned' && RIDE.driver) {
-          CURRENT_RIDE = { id: RIDE.ride_id, pickup, drop, fare: RIDE.fare };
-          setSummaryUI(pickup, drop, RIDE.fare);
-          onDriverAssigned(RIDE.driver);
-        } else {
-          startMatching(RIDE.ride_id, pickup, drop, RIDE.fare);
-        }
       }, 300);
     }
   } catch (e) {
@@ -905,4 +886,3 @@ initMapFindDriver();
 </body>
 
 </html>
-
