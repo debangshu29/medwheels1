@@ -344,6 +344,10 @@
             if(msg.last_seen) document.getElementById('sendLog').textContent = 'Driver last_seen: ' + msg.last_seen;
           } else if(msg.type === 'driver.assignment_confirmed'){
             // move to Requests or update UI
+            console.log('Ride assignment confirmed by server:', msg.ride_id);
+            updatePreviousRequestState(msg.ride_id, 'confirmed');
+            const container = document.getElementById('incoming-requests');
+            if(container) container.innerHTML = '<div class="muted">No requests right now.</div>';
           } else {
             console.log('driver ws msg', msg);
           }
