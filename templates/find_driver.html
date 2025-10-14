@@ -739,13 +739,17 @@ function onDriverAssigned(driverObj) {
   stopEtaCountdown();
   currentSearchRadius = INITIAL_SEARCH_RADIUS_M;
 
+  CURRENT_RIDE.driver = driverObj; // save driver info
+
   const tpl = document.getElementById('assigned-template');
   const left = document.getElementById('left-panel');
-  if (left) {
-    left.innerHTML = '';
-    left.appendChild(tpl.content.cloneNode(true));
-  }
+  if (!tpl || !left) return;
 
+  // replace panel contents with template
+  left.innerHTML = '';
+  left.appendChild(tpl.content.cloneNode(true));
+
+  // update assigned driver info
   const drvPhoto = document.getElementById('drv-photo');
   if (drvPhoto) drvPhoto.src = driverObj.photo_url || '{% static "img/default_driver.jpg" %}';
 
@@ -753,35 +757,47 @@ function onDriverAssigned(driverObj) {
   if (drvName) drvName.textContent = driverObj.name || 'Driver';
 
   const drvVehicle = document.getElementById('drv-vehicle');
-  if (drvVehicle) drvVehicle.textContent = (driverObj.vehicle_no || '') + (driverObj.vehicle_type ? (' • ' + driverObj.vehicle_type) : '');
+  if (drvVehicle) drvVehicle.textContent = ((driverObj.vehicle_no || '') + (driverObj.vehicle_type ? ' • ' + driverObj.vehicle_type : '')).trim();
 
   const drvEta = document.getElementById('drv-eta');
-  if (drvEta) drvEta.textContent = driverObj.eta_min ? ('Arriving in ' + driverObj.eta_min + ' min') : '';
+  if (drvEta) drvEta.textContent = driverObj.eta_min ? `Arriving in ${driverObj.eta_min} min` : '';
 
+  // update fare
   if (driverObj.fare) {
     const fareAssigned = document.getElementById('ui-fare-assigned');
     if (fareAssigned) fareAssigned.textContent = '₹ ' + Number(driverObj.fare).toFixed(2);
   }
 
+  // update summary panel addresses
   setSummaryUI(CURRENT_RIDE.pickup, CURRENT_RIDE.drop, CURRENT_RIDE.fare);
 
+  // wire cancel button
   const cancelAssignedBtn = document.getElementById('cancel-assigned-btn');
   if (cancelAssignedBtn) {
-    cancelAssignedBtn.addEventListener('click', function () {
-      openCancelConfirm(CURRENT_RIDE.id);
-    });
+    cancelAssignedBtn.addEventListener('click', () => openCancelConfirm(CURRENT_RIDE.id));
   }
 
-  if (driverObj.lat && driverObj.lng) {
+  // update map marker for driver
+  if (driverObj.lat != null && driverObj.lng != null) {
     updateDriverLocation(Number(driverObj.lat), Number(driverObj.lng), driverObj.name || 'Driver');
-  }
 
-  if (driverObj.lat && driverObj.lng) {
-    drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) }, { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) });
+    // draw route from driver -> pickup -> drop
+    if (CURRENT_RIDE.drop) {
+      drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) },
+                { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) });
+    } else {
+      drawRoute({ lat: Number(driverObj.lat), lng: Number(driverObj.lng) },
+                { lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) });
+    }
   } else {
-    if (CURRENT_RIDE.drop) drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) }, { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) });
+    // fallback: pickup -> drop
+    if (CURRENT_RIDE.drop) {
+      drawRoute({ lat: Number(CURRENT_RIDE.pickup.lat), lng: Number(CURRENT_RIDE.pickup.lng) },
+                { lat: Number(CURRENT_RIDE.drop.lat), lng: Number(CURRENT_RIDE.drop.lng) });
+    }
   }
 }
+
 
 function onDriverLocationUpdate(loc) {
   updateDriverLocation(Number(loc.lat), Number(loc.lng));
@@ -886,3 +902,4 @@ initMapFindDriver();
 </body>
 
 </html>
+
