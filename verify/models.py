@@ -163,3 +163,11 @@ class Users(models.Model):
 
     def __str__(self):
         return f"{self.name} <{self.email}>"
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
