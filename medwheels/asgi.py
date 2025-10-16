@@ -2,11 +2,11 @@ import os
 import logging
 from urllib.parse import unquote
 
-# set DJANGO_SETTINGS_MODULE first
+# Ensure Django settings are loaded before importing ORM models
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medwheels.settings')
 
 import django
-django.setup()  # MUST call before importing Django models
+django.setup()  # MUST be called before importing Django ORM classes
 
 from django.core.asgi import get_asgi_application
 from asgiref.sync import sync_to_async
@@ -19,53 +19,77 @@ from channels.auth import AuthMiddlewareStack
 
 import main.routing
 
+# Import your custom Users model (used by your code)
+# adjust path if your app module is named differently
+from verify.models import Users as CustomUsers
+
 logger = logging.getLogger("medwheels.asgi")
 logger.setLevel(logging.INFO)
 
 django_asgi_app = get_asgi_application()
-User = get_user_model()
+DjangoUser = get_user_model()
 
 
+# sync DB work wrapped for async
 @sync_to_async
-def _user_from_session_key(session_key):
+def _resolve_user_from_session(session_key):
     """
-    Sync DB access to read session and resolve user id.
-    Returns (user instance or None, debug_message)
+    Returns (user_obj_or_None, debug_message)
+    This tries:
+      1) Django auth key: '_auth_user_id' -> resolve via DjangoUser
+      2) Custom 'user_id' -> resolve via verify.models.Users
     """
     try:
         sess = Session.objects.get(session_key=session_key)
     except Session.DoesNotExist:
-        return None, f"no session with key {session_key!r}"
+        return None, f"session not found for key {session_key!r}"
+
     try:
         data = sess.get_decoded()
     except Exception as e:
         return None, f"session decode failed: {e}"
-    uid = data.get('_auth_user_id')
-    if not uid:
-        return None, f"session {session_key!r} has no _auth_user_id"
-    try:
-        u = User.objects.get(pk=uid)
-        return u, f"resolved user id={uid}"
-    except User.DoesNotExist:
-        return None, f"user id {uid} not found"
+
+    # 1) Try Django auth user
+    auth_uid = data.get('_auth_user_id')
+    if auth_uid:
+        try:
+            u = DjangoUser.objects.get(pk=auth_uid)
+            return u, f"_auth_user_id -> DjangoUser id={auth_uid}"
+        except DjangoUser.DoesNotExist:
+            return None, f"_auth_user_id {auth_uid} not found in DjangoUser"
+
+    # 2) Try custom session key 'user_id' used by your codebase
+    custom_uid = data.get('user_id')
+    if custom_uid:
+        try:
+            # custom user id may be stored as int or str; coerce
+            u = CustomUsers.objects.get(pk=int(custom_uid))
+            return u, f"user_id -> CustomUsers id={custom_uid}"
+        except CustomUsers.DoesNotExist:
+            return None, f"user_id {custom_uid} not found in CustomUsers"
+        except Exception as e:
+            return None, f"user_id lookup failed: {e}"
+
+    # no recognizable auth info
+    return None, "session contains no '_auth_user_id' or 'user_id'"
 
 
 class RobustCookieAuthMiddleware:
     """
-    Middleware for websockets that:
-      - ensures scope['cookies'] is present (parsed),
-      - tries to resolve a logged-in user from sessionid header if scope['user']
-        is anonymous/missing,
-      - logs helpful debug messages so we know what went wrong.
-    Wraps AuthMiddlewareStack in the application below.
+    WebSocket middleware that:
+      - ensures scope['cookies'] is present (parses cookie header if needed)
+      - resolves the user from session key checking both Django auth (_auth_user_id)
+        and the custom 'user_id' session key (verify.models.Users)
+      - sets scope['user'] to the resolved user instance (or AnonymousUser)
+      - logs diagnostic messages for debugging
+    Wrap AuthMiddlewareStack with this middleware in application below.
     """
     def __init__(self, inner):
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
-        # Only operate on websocket connections
         if scope.get('type') == 'websocket':
-            # 1) Ensure scope['cookies'] exists by parsing cookie header if needed
+            # Ensure cookies exist in scope (Channels sometimes leaves it empty)
             cookies = scope.get('cookies')
             if not cookies:
                 cookies = {}
@@ -76,7 +100,6 @@ class RobustCookieAuthMiddleware:
                             raw = hv.decode('latin1')
                         except Exception:
                             raw = hv.decode('utf-8', 'ignore')
-                        # parse "a=1; b=2"
                         for part in raw.split(';'):
                             part = part.strip()
                             if not part or '=' not in part:
@@ -84,31 +107,29 @@ class RobustCookieAuthMiddleware:
                             name, val = part.split('=', 1)
                             cookies[name.strip()] = unquote(val.strip())
                         break
-                # attach parsed cookies for consumers and logs
                 scope['cookies'] = cookies
-                logger.info("ASGI parsed cookies: %s", {k: (v[:6] + '...') if len(v) > 6 else v for k, v in cookies.items()})
+                logger.info("ASGI parsed cookies: %s", {k: (v[:10] + '...') if len(v) > 10 else v for k, v in cookies.items()})
 
-            # 2) If scope['user'] is missing or anonymous, attempt to find user from sessionid
+            # If user not authenticated in scope, try restore from sessionid
             user_in_scope = scope.get('user')
             if not user_in_scope or not getattr(user_in_scope, 'is_authenticated', False):
-                session_key = cookies.get('sessionid') or None
+                session_key = scope.get('cookies', {}).get('sessionid')
                 if session_key:
-                    user, dbg = await _user_from_session_key(session_key)
-                    if user:
-                        scope['user'] = user
-                        logger.info("ASGI restored user from session: %s (session=%s)", getattr(user, 'id', None), session_key[:8] + '...')
+                    user_obj, dbg = await _resolve_user_from_session(session_key)
+                    if user_obj:
+                        scope['user'] = user_obj
+                        # Log which model we restored from (DjangoUser or CustomUsers)
+                        model_name = type(user_obj).__name__
+                        logger.info("ASGI restored user from session: %s (model=%s) session=%s", getattr(user_obj, 'id', None), model_name, (session_key[:8] + '...'))
                     else:
-                        # explicit message for debugging
-                        logger.info("ASGI user restore failed from sessionkey=%s: %s", session_key[:8] + '...', dbg)
+                        logger.info("ASGI user restore failed from sessionkey=%s: %s", (session_key[:8] + '...'), dbg)
                         scope['user'] = AnonymousUser()
                 else:
-                    logger.info("ASGI no sessionid cookie in scope['cookies']; cannot restore user")
+                    logger.info("ASGI no sessionid cookie found in scope['cookies']")
                     scope['user'] = AnonymousUser()
             else:
-                # already authenticated (AuthMiddlewareStack maybe populated it)
                 logger.info("ASGI scope already has authenticated user id=%s", getattr(scope.get('user'), 'id', None))
 
-        # call inner application
         return await self.inner(scope, receive, send)
 
 
